@@ -1,0 +1,142 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import fonts */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+:root {
+  --void: #000000;
+  --matrix: #00FF00;
+  --mev-red: #FF0000;
+  --cyber: #00FFFF;
+  --shield: #8B5CF6;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  background-color: var(--void);
+  color: var(--matrix);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1a1a1a;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00FF0044;
+}
+
+/* Custom Classes */
+@layer components {
+  .terminal-border {
+    @apply border border-matrix/30 rounded-lg;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.1);
+  }
+
+  .terminal-glow {
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.3),
+                0 0 20px rgba(0, 255, 0, 0.2),
+                0 0 30px rgba(0, 255, 0, 0.1);
+  }
+
+  .mev-glow {
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.3),
+                0 0 20px rgba(255, 0, 0, 0.2),
+                0 0 30px rgba(255, 0, 0, 0.1);
+  }
+
+  .shield-glow {
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.3),
+                0 0 20px rgba(139, 92, 246, 0.2),
+                0 0 30px rgba(139, 92, 246, 0.1);
+  }
+
+  .glass-dark {
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 255, 0, 0.1);
+  }
+
+  .scanline {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .scanline::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+      transparent 50%,
+      rgba(0, 0, 0, 0.1) 50%
+    );
+    background-size: 100% 4px;
+    pointer-events: none;
+    opacity: 0.3;
+  }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(0, 255, 0, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 255, 0, 0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+
+  .text-glow {
+    text-shadow: 0 0 10px currentColor;
+  }
+
+  .btn-matrix {
+    @apply px-6 py-3 bg-matrix/10 border border-matrix/50 text-matrix rounded-lg
+           hover:bg-matrix/20 hover:border-matrix transition-all duration-300;
+  }
+
+  .btn-matrix:hover {
+    box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+  }
+}
+
+/* Animations */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.cursor-blink::after {
+  content: '█';
+  animation: blink 1s step-end infinite;
+}
+
+/* Particle effect base */
+.particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: var(--matrix);
+  border-radius: 50%;
+  pointer-events: none;
+}

@@ -1,0 +1,47 @@
+{
+  "name": "swarm-shield",
+  "version": "0.1.0",
+  "description": "Dark Liquidity Pool for Autonomous AI Agents - MEV Protection via ZK Compression on Solana",
+  "keywords": [
+    "solana",
+    "privacy",
+    "mev",
+    "ai-agents",
+    "dark-pool",
+    "zk-compression",
+    "light-protocol"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "build": "anchor build",
+    "test": "anchor test",
+    "deploy:devnet": "anchor deploy --provider.cluster devnet",
+    "simulate:agents": "python simulation/agent_swarm.py",
+    "simulate:batcher": "python simulation/dark_batcher.py",
+    "sdk:build": "tsc -p sdk/tsconfig.json",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.31.1",
+    "@lightprotocol/compressed-token": "^0.17.1",
+    "@lightprotocol/stateless.js": "^0.17.1",
+    "@solana/web3.js": "^1.95.0",
+    "@solana/spl-token": "^0.4.6",
+    "bn.js": "^5.2.1",
+    "bs58": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.5",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0",
+    "ts-mocha": "^10.0.0",
+    "chai": "^4.3.10",
+    "@types/chai": "^4.3.11",
+    "prettier": "^3.1.0",
+    "eslint": "^8.56.0"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}
