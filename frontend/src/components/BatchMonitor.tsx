@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Shield, TrendingUp, Users, Zap } from "lucide-react";
-import { motion } from "framer-motion";
+import { useConnection } from "@solana/wallet-adapter-react";
+import { Shield, TrendingUp, Users, Zap, Activity } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useBatchEventListener } from "@/hooks/useEventListeners";
 
 interface BatchMonitorProps {
   totalBatches: number;
@@ -15,13 +17,28 @@ export default function BatchMonitor({
   totalVolumeProtected,
   totalAgents,
 }: BatchMonitorProps) {
-  // Calculate estimated MEV saved (3% of volume)
-  const mevSaved = totalVolumeProtected * 0.03;
+  const { connection } = useConnection();
+  const { totalMevSaved: liveMevSaved, batchCount: liveBatchCount, latestBatch } = useBatchEventListener(connection);
+
+  // Use live data if available, otherwise use props
+  const displayBatches = liveBatchCount > 0 ? totalBatches + liveBatchCount : totalBatches;
+  const displayMevSaved = (totalVolumeProtected * 0.0297) + (liveMevSaved / 1e9);
+
+  const [showPulse, setShowPulse] = useState(false);
+
+  // Trigger pulse animation when new batch detected
+  useEffect(() => {
+    if (latestBatch) {
+      setShowPulse(true);
+      const timer = setTimeout(() => setShowPulse(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [latestBatch]);
 
   const stats = [
     {
       label: "Batches Executed",
-      value: totalBatches,
+      value: displayBatches,
       icon: Zap,
       color: "text-matrix",
       bgColor: "bg-matrix/10",
@@ -42,7 +59,7 @@ export default function BatchMonitor({
     },
     {
       label: "MEV Saved",
-      value: `~${mevSaved.toFixed(4)} SOL`,
+      value: `~${displayMevSaved.toFixed(4)} SOL`,
       icon: TrendingUp,
       color: "text-cyber",
       bgColor: "bg-cyber/10",
@@ -51,7 +68,26 @@ export default function BatchMonitor({
   ];
 
   return (
-    <div className="bg-void/50 border border-matrix/30 rounded-lg p-6">
+    <div className="bg-void/50 border border-matrix/30 rounded-lg p-6 relative">
+      {/* Live Indicator */}
+      {connection && (
+        <div className="absolute top-4 right-4 flex items-center gap-2">
+          <motion.div
+            className="w-2 h-2 bg-cyber rounded-full"
+            animate={{
+              opacity: [1, 0.3, 1],
+              scale: [1, 1.2, 1],
+            }}
+            transition={{
+              duration: 2,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          />
+          <span className="text-xs text-cyber font-mono uppercase">Live</span>
+        </div>
+      )}
+
       <div className="flex items-center gap-3 mb-6">
         <Shield className="w-6 h-6 text-matrix" />
         <div>
