@@ -83,6 +83,11 @@ export class SwarmShieldKeeperClient {
     private keeper: Keypair
   ) {}
 
+  // Get keeper public key
+  getKeeperPublicKey(): PublicKey {
+    return this.keeper.publicKey;
+  }
+
   // Get config
   async getConfig(): Promise<SwarmConfig | null> {
     try {

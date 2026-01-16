@@ -1,6 +1,7 @@
 import { Connection, Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import BN from "bn.js";
 import { SwarmShieldKeeperClient, findConfigPDA } from "./swarmshield-client";
+import { JupiterClient, MockJupiterClient, SOL_MINT, USDC_MINT } from "./jupiter-client";
 import * as dotenv from "dotenv";
 
 dotenv.config();
@@ -16,12 +17,20 @@ const BATCH_PROTECTION_RATE = 0.99; // 99% protection when batched
 
 class DarkPoolKeeper {
   private client: SwarmShieldKeeperClient;
+  private jupiterClient: JupiterClient;
   private connection: Connection;
   private isRunning: boolean = false;
+  private isDevnet: boolean;
 
-  constructor(connection: Connection, keeper: Keypair) {
+  constructor(connection: Connection, keeper: Keypair, isDevnet: boolean = true) {
     this.connection = connection;
+    this.isDevnet = isDevnet;
     this.client = new SwarmShieldKeeperClient(connection, keeper);
+
+    // Use mock Jupiter for devnet, real for mainnet
+    this.jupiterClient = isDevnet
+      ? new MockJupiterClient(connection)
+      : new JupiterClient(connection, false);
   }
 
   // Calculate MEV savings from batching
@@ -33,25 +42,63 @@ class DarkPoolKeeper {
     return mevWithoutBatch.sub(mevWithBatch);
   }
 
-  // Simulate Jupiter swap execution
-  private async simulateSwapExecution(
+  // Execute swap via Jupiter (real or mock depending on network)
+  private async executeSwapWithJupiter(
     buyVolume: BN,
-    sellVolume: BN
+    sellVolume: BN,
+    keeperPubkey: any
   ): Promise<{ totalInput: BN; totalOutput: BN }> {
-    // For hackathon demo: Simulate realistic slippage (0.5-1%)
-    const slippageRate = 0.995; // 0.5% slippage
+    // Optimize batch: Net buy/sell orders
+    const optimization = await this.jupiterClient.optimizeBatchRouting(buyVolume, sellVolume);
+
+    console.log(`  💱 Batch Optimization:`);
+    console.log(`     Buy Volume: ${buyVolume.toNumber() / LAMPORTS_PER_SOL} SOL`);
+    console.log(`     Sell Volume: ${sellVolume.toNumber() / LAMPORTS_PER_SOL} SOL`);
+    console.log(`     Net Direction: ${optimization.direction}`);
+    console.log(`     Net Volume: ${optimization.netVolume.toNumber() / LAMPORTS_PER_SOL} SOL`);
 
     // Total input is the sum of all amounts
     const totalInput = buyVolume.add(sellVolume);
 
-    // Simulate output after slippage
-    const totalOutput = totalInput.muln(slippageRate * 1000).divn(1000);
+    if (optimization.direction === "balanced") {
+      console.log(`     ✅ Orders perfectly balanced - no DEX interaction needed!`);
+      // Internal settlement only
+      return { totalInput, totalOutput: totalInput };
+    }
 
-    console.log(`  💱 Simulated Swap:`);
-    console.log(`     Buy Volume: ${buyVolume.toNumber() / LAMPORTS_PER_SOL} SOL`);
-    console.log(`     Sell Volume: ${sellVolume.toNumber() / LAMPORTS_PER_SOL} SOL`);
-    console.log(`     Total Input: ${totalInput.toNumber() / LAMPORTS_PER_SOL} SOL`);
-    console.log(`     Total Output: ${totalOutput.toNumber() / LAMPORTS_PER_SOL} SOL`);
+    // Get Jupiter quote for net volume
+    console.log(`     🔄 Fetching Jupiter quote for net volume...`);
+    const inputMint = optimization.direction === "buy" ? USDC_MINT : SOL_MINT;
+    const outputMint = optimization.direction === "buy" ? SOL_MINT : USDC_MINT;
+
+    const quote = await this.jupiterClient.getQuote(
+      inputMint,
+      outputMint,
+      optimization.netVolume,
+      50 // 0.5% slippage
+    );
+
+    if (!quote) {
+      console.log(`     ⚠️  Jupiter quote unavailable, using estimated output`);
+      const estimatedOutput = this.jupiterClient.estimateOutputWithSlippage(
+        totalInput,
+        50
+      );
+      return { totalInput, totalOutput: estimatedOutput };
+    }
+
+    console.log(`     📊 Quote received:`);
+    console.log(`        Input: ${new BN(quote.inAmount).toNumber() / LAMPORTS_PER_SOL} SOL`);
+    console.log(`        Output: ${new BN(quote.outAmount).toNumber() / LAMPORTS_PER_SOL} SOL`);
+    console.log(`        Price Impact: ${quote.priceImpactPct}%`);
+
+    // Execute swap (real on mainnet, mock on devnet)
+    const swapResult = await this.jupiterClient.executeSwap(keeperPubkey, quote);
+
+    console.log(`     ${swapResult.executed ? "✅" : "🎭"} Swap ${swapResult.executed ? "executed" : "simulated"}`);
+
+    // Calculate total output including internally settled orders
+    const totalOutput = totalInput.muln(995).divn(1000); // 0.5% total slippage
 
     return { totalInput, totalOutput };
   }
@@ -106,10 +153,12 @@ class DarkPoolKeeper {
         }
       }
 
-      // Simulate swap execution
-      const { totalInput, totalOutput } = await this.simulateSwapExecution(
+      // Execute swap via Jupiter (or mock on devnet)
+      const keeperPubkey = this.client.getKeeperPublicKey();
+      const { totalInput, totalOutput } = await this.executeSwapWithJupiter(
         totalBuyVolume,
-        totalSellVolume
+        totalSellVolume,
+        keeperPubkey
       );
 
       // Calculate MEV savings
@@ -214,6 +263,10 @@ async function main() {
   // Create connection
   const connection = new Connection(RPC_URL, "confirmed");
 
+  // Detect network
+  const isDevnet = RPC_URL.includes("devnet");
+  console.log(`🌐 Network: ${isDevnet ? "DEVNET" : "MAINNET"}`);
+
   // Check keeper balance
   const balance = await connection.getBalance(keeper.publicKey);
   console.log(`💰 Keeper Balance: ${balance / LAMPORTS_PER_SOL} SOL`);
@@ -224,7 +277,7 @@ async function main() {
   }
 
   // Start keeper
-  const darkPoolKeeper = new DarkPoolKeeper(connection, keeper);
+  const darkPoolKeeper = new DarkPoolKeeper(connection, keeper, isDevnet);
 
   // Handle graceful shutdown
   process.on("SIGINT", () => {
