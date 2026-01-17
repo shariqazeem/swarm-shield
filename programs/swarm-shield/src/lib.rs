@@ -295,7 +295,7 @@ pub mod swarm_shield {
         intent.intent_type = intent_type;
         intent.amount = amount;
         intent.min_output = min_output;
-        intent.expiry_slot = Clock::get()?.slot + 100; // ~40 seconds
+        intent.expiry_slot = Clock::get()?.slot + 600; // ~4 minutes (for testing/demo)
         intent.is_pending = true;
         intent.bump = ctx.bumps.intent;
 
