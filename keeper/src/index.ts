@@ -180,15 +180,22 @@ class DarkPoolKeeper {
       console.log(`   💰 Value Protected: ${mevSaved.toNumber() / LAMPORTS_PER_SOL} SOL`);
       console.log(`   📈 Protection Rate: ${(BATCH_PROTECTION_RATE * 100).toFixed(1)}%`);
 
-      // Execute batch on-chain
+      // Execute batch on-chain with settlement
       const batchId = config.totalBatches;
-      console.log(`\n⚡ Executing batch #${batchId.toString()} on-chain...`);
+      console.log(`\n⚡ Executing batch #${batchId.toString()} on-chain with settlement...`);
+
+      // Prepare intent accounts for settlement
+      const intentAccountsForSettlement = batchIntents.map(({ pubkey, intent }) => ({
+        intentPubkey: pubkey,
+        agentPubkey: intent.agent,
+      }));
 
       const signature = await this.client.executeBatch(
         batchId,
         batchIntents.length,
         totalInput,
-        totalOutput
+        totalOutput,
+        intentAccountsForSettlement
       );
 
       console.log(`\n✅ BATCH EXECUTED SUCCESSFULLY!`);

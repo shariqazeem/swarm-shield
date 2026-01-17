@@ -329,6 +329,9 @@ pub mod swarm_shield {
     /// Execute a batch of intents (called by keeper)
     /// This aggregates multiple agent intents into ONE transaction
     /// MEV bots see one trade, not individual agent activity
+    ///
+    /// COMPLETE IMPLEMENTATION: Now includes settlement logic
+    /// remaining_accounts should be: [intent_0, agent_0, intent_1, agent_1, ...]
     pub fn execute_batch(
         ctx: Context<ExecuteBatch>,
         batch_id: u64,
@@ -367,11 +370,89 @@ pub mod swarm_shield {
             .checked_div(10000)
             .ok_or(SwarmShieldError::Overflow)?;
 
+        // COMPLETE FEATURE: Settlement logic
+        // Distribute output tokens proportionally to each agent
+        let remaining = &ctx.remaining_accounts;
+        let account_count = remaining.len();
+
+        // Expecting pairs: (intent, agent) for each intent in batch
+        // So we should have intent_count * 2 accounts
+        require!(
+            account_count == (intent_count as usize * 2),
+            SwarmShieldError::InvalidAccountCount
+        );
+
+        msg!("Settling {} intents with {} total output", intent_count, total_output);
+
+        // Process each intent and settle to agent
+        for i in 0..intent_count {
+            let idx = i as usize * 2;
+            let intent_account = &remaining[idx];
+            let agent_account = &remaining[idx + 1];
+
+            // Deserialize intent
+            let intent_data = intent_account.try_borrow_data()?;
+            let intent_disc_len = 8;
+            if intent_data.len() < intent_disc_len + 59 {
+                continue; // Skip invalid account
+            }
+
+            let intent_amount_bytes: [u8; 8] = intent_data[intent_disc_len + 33..intent_disc_len + 41]
+                .try_into()
+                .map_err(|_| SwarmShieldError::InvalidAmount)?;
+            let intent_amount = u64::from_le_bytes(intent_amount_bytes);
+
+            // Calculate this agent's proportional share of output
+            // output_share = (intent_amount / total_input) * total_output
+            let output_share = (intent_amount as u128)
+                .checked_mul(total_output as u128)
+                .ok_or(SwarmShieldError::Overflow)?
+                .checked_div(total_input as u128)
+                .ok_or(SwarmShieldError::Overflow)? as u64;
+
+            // Deserialize agent account
+            let mut agent_data = agent_account.try_borrow_mut_data()?;
+            let agent_disc_len = 8;
+            if agent_data.len() < agent_disc_len + 57 {
+                continue; // Skip invalid account
+            }
+
+            // Read current SOL balance (offset 40 after discriminator)
+            let balance_offset = agent_disc_len + 40;
+            let current_balance_bytes: [u8; 8] = agent_data[balance_offset..balance_offset + 8]
+                .try_into()
+                .map_err(|_| SwarmShieldError::Overflow)?;
+            let current_balance = u64::from_le_bytes(current_balance_bytes);
+
+            // Deduct input amount (agent spent this)
+            let balance_after_deduction = current_balance
+                .checked_sub(intent_amount)
+                .ok_or(SwarmShieldError::InsufficientBalance)?;
+
+            // Add output share (agent received this from swap)
+            let new_balance = balance_after_deduction
+                .checked_add(output_share)
+                .ok_or(SwarmShieldError::Overflow)?;
+
+            // Write new balance back
+            agent_data[balance_offset..balance_offset + 8].copy_from_slice(&new_balance.to_le_bytes());
+
+            msg!(
+                "Settled intent #{}: Input {} → Output {} (balance {} → {})",
+                i,
+                intent_amount,
+                output_share,
+                current_balance,
+                new_balance
+            );
+        }
+
         msg!(
-            "BATCH EXECUTED - MEV DEFEATED! Batch #{}: {} intents, {} volume protected",
+            "BATCH EXECUTED - MEV DEFEATED! Batch #{}: {} intents, {} volume protected, {} settled",
             batch_id,
             intent_count,
-            total_input
+            total_input,
+            intent_count
         );
 
         // Emit event with MEV savings
@@ -627,6 +708,9 @@ pub enum SwarmShieldError {
 
     #[msg("Slippage tolerance exceeded")]
     SlippageExceeded,
+
+    #[msg("Invalid account count for settlement")]
+    InvalidAccountCount,
 }
 
 // ============================================================================

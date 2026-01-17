@@ -21,8 +21,9 @@ idl-build = ["anchor-lang/idl-build"]
 [dependencies]
 anchor-lang = "0.31.1"
 # Light Protocol ZK Compression for private trade intents
-light-sdk = { git = "https://github.com/Lightprotocol/light-protocol.git", features = ["cpi"] }
-account-compression = { git = "https://github.com/solana-labs/solana-program-library", features = ["cpi"] }
+# Temporarily commented for production build - will add back with full integration
+# light-sdk = { git = "https://github.com/Lightprotocol/light-protocol.git", features = ["cpi"] }
+# account-compression = { git = "https://github.com/solana-labs/solana-program-library", features = ["cpi"] }
 
 [dev-dependencies]
 anchor-client = "0.31.1"

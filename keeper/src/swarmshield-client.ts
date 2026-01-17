@@ -134,12 +134,13 @@ export class SwarmShieldKeeperClient {
     }
   }
 
-  // Execute batch
+  // Execute batch with settlement
   async executeBatch(
     batchId: BN,
     intentCount: number,
     totalInput: BN,
-    totalOutput: BN
+    totalOutput: BN,
+    intentAccounts: Array<{ intentPubkey: PublicKey; agentPubkey: PublicKey }>
   ): Promise<string> {
     const [configPDA] = findConfigPDA();
     const [batchPDA] = findBatchPDA(batchId);
@@ -153,13 +154,22 @@ export class SwarmShieldKeeperClient {
       totalOutput.toArrayLike(Buffer, "le", 8),
     ]);
 
+    // Build account metas with settlement accounts
+    const accountMetas = [
+      { pubkey: configPDA, isSigner: false, isWritable: true },
+      { pubkey: batchPDA, isSigner: false, isWritable: true },
+      { pubkey: this.keeper.publicKey, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ];
+
+    // Add intent and agent accounts for settlement (pairs: intent, agent)
+    for (const { intentPubkey, agentPubkey } of intentAccounts) {
+      accountMetas.push({ pubkey: intentPubkey, isSigner: false, isWritable: true });
+      accountMetas.push({ pubkey: agentPubkey, isSigner: false, isWritable: true });
+    }
+
     const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: configPDA, isSigner: false, isWritable: true },
-        { pubkey: batchPDA, isSigner: false, isWritable: true },
-        { pubkey: this.keeper.publicKey, isSigner: true, isWritable: true },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      ],
+      keys: accountMetas,
       programId: SWARM_SHIELD_PROGRAM_ID,
       data,
     });
