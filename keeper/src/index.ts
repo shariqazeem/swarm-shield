@@ -121,18 +121,30 @@ class DarkPoolKeeper {
         return;
       }
 
+      // PRODUCTION FIX: Filter out expired intents
+      const currentSlot = await this.connection.getSlot();
+      const activeIntents = pendingIntents.filter(({ intent }) => {
+        const isExpired = currentSlot > intent.expirySlot.toNumber();
+        return !isExpired && intent.isPending;
+      });
+
       console.log(`\n📊 Found ${pendingIntents.length} pending intent(s)`);
+      if (activeIntents.length < pendingIntents.length) {
+        const expiredCount = pendingIntents.length - activeIntents.length;
+        console.log(`   ⏰ Filtered out ${expiredCount} expired intent(s)`);
+      }
+      console.log(`   ✅ Active intents: ${activeIntents.length}`);
 
       // Check if we have enough for a batch
-      if (pendingIntents.length < config.minBatchSize) {
+      if (activeIntents.length < config.minBatchSize) {
         console.log(
-          `⏳ Waiting for more intents (need ${config.minBatchSize}, have ${pendingIntents.length})`
+          `⏳ Waiting for more intents (need ${config.minBatchSize}, have ${activeIntents.length})`
         );
         return;
       }
 
-      // Take up to maxBatchSize intents
-      const batchIntents = pendingIntents.slice(0, config.maxBatchSize);
+      // Take up to maxBatchSize intents (from active, non-expired intents)
+      const batchIntents = activeIntents.slice(0, config.maxBatchSize);
 
       console.log(`\n🔄 Processing batch of ${batchIntents.length} intents:`);
 

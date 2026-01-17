@@ -205,10 +205,7 @@ export class SwarmShieldKeeperClient {
         {
           filters: [
             {
-              memcmp: {
-                offset: 8 + 32, // Skip discriminator + agent pubkey
-                bytes: "2", // intentType offset, we just want intent accounts
-              },
+              dataSize: 67, // TradeIntent account size: 8 discriminator + 59 data
             },
           ],
         }
