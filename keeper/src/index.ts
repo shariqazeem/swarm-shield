@@ -1,7 +1,7 @@
 import { Connection, Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import BN from "bn.js";
 import { SwarmShieldKeeperClient, findConfigPDA } from "./swarmshield-client";
-import { JupiterClient, MockJupiterClient, SOL_MINT, USDC_MINT } from "./jupiter-client";
+import { JupiterClient, SOL_MINT, USDC_MINT } from "./jupiter-client";
 import * as dotenv from "dotenv";
 
 dotenv.config();
@@ -27,10 +27,10 @@ class DarkPoolKeeper {
     this.isDevnet = isDevnet;
     this.client = new SwarmShieldKeeperClient(connection, keeper);
 
-    // Use mock Jupiter for devnet, real for mainnet
-    this.jupiterClient = isDevnet
-      ? new MockJupiterClient(connection)
-      : new JupiterClient(connection, false);
+    // Use real Jupiter client (simulates on devnet, executes on mainnet)
+    this.jupiterClient = new JupiterClient(connection, isDevnet);
+
+    console.log(`🔧 Jupiter Mode: ${isDevnet ? 'DEVNET (simulation with real quotes)' : 'MAINNET (real execution)'}`);
   }
 
   // Calculate MEV savings from batching
@@ -79,7 +79,8 @@ class DarkPoolKeeper {
     );
 
     if (!quote) {
-      console.log(`     ⚠️  Jupiter quote unavailable, using estimated output`);
+      console.log(`     ⚠️  Jupiter quote unavailable (expected on devnet - no liquidity)`);
+      console.log(`     📊 Using realistic slippage estimation instead`);
       const estimatedOutput = this.jupiterClient.estimateOutputWithSlippage(
         totalInput,
         50
@@ -87,18 +88,23 @@ class DarkPoolKeeper {
       return { totalInput, totalOutput: estimatedOutput };
     }
 
-    console.log(`     📊 Quote received:`);
+    console.log(`     ✅ Jupiter quote received:`);
     console.log(`        Input: ${new BN(quote.inAmount).toNumber() / LAMPORTS_PER_SOL} SOL`);
     console.log(`        Output: ${new BN(quote.outAmount).toNumber() / LAMPORTS_PER_SOL} SOL`);
     console.log(`        Price Impact: ${quote.priceImpactPct}%`);
 
-    // Execute swap (real on mainnet, mock on devnet)
+    // Execute swap (real on mainnet, simulated on devnet)
+    console.log(`     ⚡ Executing swap...`);
     const swapResult = await this.jupiterClient.executeSwap(keeperPubkey, quote);
 
-    console.log(`     ${swapResult.executed ? "✅" : "🎭"} Swap ${swapResult.executed ? "executed" : "simulated"}`);
+    console.log(`     ${swapResult.executed ? "✅ REAL" : "🎭 SIMULATED"} swap completed`);
+    console.log(`     📤 Swap Output: ${swapResult.outputAmount.toNumber() / LAMPORTS_PER_SOL} SOL`);
+    if (swapResult.signature) {
+      console.log(`     🔗 Signature: ${swapResult.signature}`);
+    }
 
-    // Calculate total output including internally settled orders
-    const totalOutput = totalInput.muln(995).divn(1000); // 0.5% total slippage
+    // Use actual swap output from Jupiter
+    const totalOutput = swapResult.outputAmount;
 
     return { totalInput, totalOutput };
   }

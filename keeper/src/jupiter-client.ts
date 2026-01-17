@@ -68,36 +68,38 @@ export class JupiterClient {
 
   /**
    * Execute a swap using Jupiter
-   * For mainnet: Real swap
-   * For devnet: Mock swap (Jupiter doesn't fully support devnet)
+   * For mainnet: Real swap with transaction execution
+   * For devnet: Realistic simulation (Jupiter API works but lacks liquidity)
    */
   async executeSwap(
     userPublicKey: PublicKey,
-    quote: JupiterQuote
+    quote: JupiterQuote,
+    signerKeypair?: any
   ): Promise<SwapResult> {
     const inputAmount = new BN(quote.inAmount);
     const outputAmount = new BN(quote.outAmount);
 
     if (this.isDevnet) {
-      // DEVNET MODE: Simulate the swap
-      console.log("🔶 DEVNET MODE: Simulating swap (Jupiter not fully supported on devnet)");
-      console.log(`   Input: ${inputAmount.toString()} of ${quote.inputMint}`);
-      console.log(`   Output: ${outputAmount.toString()} of ${quote.outputMint}`);
+      // DEVNET MODE: Realistic simulation using quote data
+      console.log("🔶 DEVNET SWAP SIMULATION (using real quote data)");
+      console.log(`   Input: ${inputAmount.toString()} lamports`);
+      console.log(`   Expected Output: ${outputAmount.toString()} lamports`);
       console.log(`   Price Impact: ${quote.priceImpactPct}%`);
+      console.log(`   Route: ${quote.routePlan.length} hop(s)`);
 
-      // Apply realistic slippage simulation (0.5-1%)
-      const slippageRate = 0.995; // 0.5% slippage
-      const simulatedOutput = inputAmount.muln(Math.floor(slippageRate * 1000)).divn(1000);
-
+      // Use quote's actual output amount (already includes slippage)
+      // This is realistic because it's based on real Jupiter routing
       return {
         inputAmount,
-        outputAmount: simulatedOutput,
-        executed: false, // Not a real execution on devnet
+        outputAmount, // Use Jupiter's calculated output
+        executed: false, // Simulated execution
       };
     }
 
-    // MAINNET MODE: Real Jupiter swap
+    // MAINNET MODE: Real Jupiter swap with transaction execution
     try {
+      console.log("💰 EXECUTING REAL JUPITER SWAP ON MAINNET");
+
       const swapResponse = await fetch(JUPITER_SWAP_API, {
         method: "POST",
         headers: {
@@ -107,27 +109,68 @@ export class JupiterClient {
           quoteResponse: quote,
           userPublicKey: userPublicKey.toString(),
           wrapAndUnwrapSol: true,
-          // Additional swap config can go here
+          dynamicComputeUnitLimit: true,
+          prioritizationFeeLamports: "auto",
         }),
       });
 
       if (!swapResponse.ok) {
-        throw new Error(`Jupiter swap failed: ${swapResponse.statusText}`);
+        throw new Error(`Jupiter swap API failed: ${swapResponse.statusText}`);
       }
 
       const { swapTransaction } = await swapResponse.json();
 
-      // Deserialize and return the transaction
-      // Note: In production, this transaction would be signed and sent
-      console.log("✅ Jupiter swap transaction prepared");
+      // Deserialize transaction
+      const transactionBuf = Buffer.from(swapTransaction, 'base64');
+      let transaction: VersionedTransaction | Transaction;
 
+      try {
+        transaction = VersionedTransaction.deserialize(transactionBuf);
+      } catch {
+        transaction = Transaction.from(transactionBuf);
+      }
+
+      // Sign and send transaction if signer provided
+      if (signerKeypair) {
+        console.log("📝 Signing and sending transaction...");
+
+        // Sign transaction
+        if (transaction instanceof VersionedTransaction) {
+          transaction.sign([signerKeypair]);
+        } else {
+          transaction.sign(signerKeypair);
+        }
+
+        // Send transaction
+        const signature = await this.connection.sendRawTransaction(
+          transaction.serialize(),
+          {
+            skipPreflight: false,
+            maxRetries: 3,
+          }
+        );
+
+        // Wait for confirmation
+        await this.connection.confirmTransaction(signature, 'confirmed');
+
+        console.log(`✅ Swap executed! Signature: ${signature}`);
+
+        return {
+          inputAmount,
+          outputAmount,
+          signature,
+          executed: true,
+        };
+      }
+
+      console.log("✅ Jupiter swap transaction prepared (not signed)");
       return {
         inputAmount,
         outputAmount,
-        executed: true,
+        executed: false,
       };
     } catch (error) {
-      console.error("Error executing Jupiter swap:", error);
+      console.error("❌ Error executing Jupiter swap:", error);
       throw error;
     }
   }
