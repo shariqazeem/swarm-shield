@@ -10,6 +10,9 @@ import { SponsorBadges } from "@/components/SponsorBadges";
 import { ComplianceCheck } from "@/components/ComplianceCheck";
 import { IntegrationVerifier } from "@/components/IntegrationVerifier";
 import { TradeInterface } from "@/components/TradeInterface";
+import { AgentSDK } from "@/components/AgentSDK";
+import { NetworkStatus } from "@/components/NetworkStatus";
+import { SwarmActivity } from "@/components/SwarmActivity";
 import { checkCompliance, RiskLevel } from "@/lib/compliance";
 
 const WalletMultiButtonDynamic = dynamic(
@@ -87,7 +90,6 @@ export default function SwarmShield() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showError, setShowError] = useState<string | null>(null);
-  const [mevSaved, setMevSaved] = useState(0);
   const [complianceStatus, setComplianceStatus] = useState<{
     checking: boolean;
     checked: boolean;
@@ -158,13 +160,6 @@ export default function SwarmShield() {
       setCurrentStep(4);
     }
   }, [connected, swarmState]);
-
-  // Animate MEV saved counter
-  useEffect(() => {
-    const volume = swarmState.config?.totalVolumeProtected.toNumber() || 0;
-    const saved = (volume / 1e9) * 0.0297; // 2.97% MEV protection
-    setMevSaved(saved);
-  }, [swarmState.config?.totalVolumeProtected]);
 
   const handleAction = useCallback(async (action: string) => {
     setIsSubmitting(true);
@@ -293,11 +288,18 @@ export default function SwarmShield() {
             )}
           </div>
 
-          <div className="flex items-center gap-6">
-            <span className="text-xs text-white/40 font-mono hidden md:block">SOLANA DEVNET</span>
+          <div className="flex items-center gap-4 md:gap-6">
+            <NetworkStatus />
+            <span className="text-[10px] text-white/20 hidden md:block">DEVNET</span>
             <WalletMultiButtonDynamic />
           </div>
         </header>
+
+        {/* Agent SDK - For developers/judges */}
+        <AgentSDK
+          walletAddress={publicKey?.toBase58()}
+          programId="5rLQtJrr27bt4y7ERMgnQUcALKXfy2uTgEdq7rfbQvew"
+        />
 
         {/* Sponsor badges at bottom - minimal and elegant */}
         <SponsorBadges />
@@ -520,39 +522,17 @@ export default function SwarmShield() {
           </AnimatePresence>
         </main>
 
-        {/* Bottom stats - always visible */}
+        {/* Bottom stats - Dark Pool Activity */}
         <footer className="p-6 md:p-10">
-          <div className="flex justify-center gap-12 md:gap-20 text-center">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-            >
-              <p className="text-2xl md:text-3xl font-light">{totalBatches}</p>
-              <p className="text-xs text-white/40 mt-1">BATCHES EXECUTED</p>
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.7 }}
-            >
-              <p className="text-2xl md:text-3xl font-light">{totalVolume.toFixed(2)}</p>
-              <p className="text-xs text-white/40 mt-1">SOL PROTECTED</p>
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.9 }}
-            >
-              <p className="text-2xl md:text-3xl font-light text-green-400">~{mevSaved.toFixed(4)}</p>
-              <p className="text-xs text-white/40 mt-1">SOL SAVED FROM MEV</p>
-            </motion.div>
-          </div>
+          <SwarmActivity
+            totalBatches={totalBatches}
+            totalVolume={totalVolume}
+          />
 
           <div className="flex flex-col items-center gap-3 mt-8">
             <HowItWorks />
             <p className="text-xs text-white/20">
-              Built for Solana Privacy Hackathon 2026 • Powered by Light Protocol Architecture
+              Dark Liquidity Pool • Light Protocol ZK Compression • Agent Infrastructure
             </p>
           </div>
         </footer>

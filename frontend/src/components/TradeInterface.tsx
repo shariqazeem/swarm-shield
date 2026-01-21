@@ -107,11 +107,100 @@ export function TradeInterface({
               {direction === 'sell' ? 'Sell SOL' : 'Buy SOL'}
             </h1>
             <p className="text-white/30 font-light mb-12">
-              Protected from MEV
+              Dark Pool • MEV Protected
             </p>
 
+            {/* Dark Pool Balances - Always Visible */}
+            <div className="mb-10 p-4 rounded-2xl bg-white/[0.02] border border-white/5">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] text-white/30 uppercase tracking-widest">Dark Pool Balance</span>
+                <button
+                  onClick={() => setShowVault(!showVault)}
+                  className="text-[10px] text-white/40 hover:text-white/60 transition-colors"
+                >
+                  {showVault ? 'Hide' : 'Manage'}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-center gap-8">
+                <div className="text-center">
+                  <p className="text-xl font-light">{shieldedSol.toFixed(4)}</p>
+                  <p className="text-[10px] text-white/30 mt-1">SOL</p>
+                </div>
+                <div className="w-px h-8 bg-white/10" />
+                <div className="text-center">
+                  <p className="text-xl font-light">{shieldedUsdc.toFixed(2)}</p>
+                  <p className="text-[10px] text-white/30 mt-1">USDC</p>
+                </div>
+              </div>
+
+              {/* Quick Actions - Expandable */}
+              <AnimatePresence>
+                {showVault && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="pt-4 mt-4 border-t border-white/5">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-[10px] text-white/20">Wallet</span>
+                        <span className="text-[10px] text-white/30">
+                          {walletSol.toFixed(2)} SOL · {walletUsdc.toFixed(2)} USDC
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap justify-center gap-2">
+                        <button
+                          onClick={() => onDeposit('sol')}
+                          className="px-3 py-1.5 text-[10px] text-white/50 border border-white/10 rounded-lg
+                                   hover:border-white/30 hover:text-white/70 transition-all"
+                        >
+                          Shield SOL
+                        </button>
+                        <button
+                          onClick={() => onDeposit('usdc')}
+                          disabled={walletUsdc === 0}
+                          className="px-3 py-1.5 text-[10px] text-white/50 border border-white/10 rounded-lg
+                                   hover:border-white/30 hover:text-white/70 transition-all disabled:opacity-30"
+                        >
+                          Shield USDC
+                        </button>
+                        <button
+                          onClick={() => onWithdraw('sol')}
+                          disabled={shieldedSol === 0}
+                          className="px-3 py-1.5 text-[10px] text-white/50 border border-white/10 rounded-lg
+                                   hover:border-white/30 hover:text-white/70 transition-all disabled:opacity-30"
+                        >
+                          Unshield SOL
+                        </button>
+                        <button
+                          onClick={() => onWithdraw('usdc')}
+                          disabled={shieldedUsdc === 0}
+                          className="px-3 py-1.5 text-[10px] text-white/50 border border-white/10 rounded-lg
+                                   hover:border-white/30 hover:text-white/70 transition-all disabled:opacity-30"
+                        >
+                          Unshield USDC
+                        </button>
+                      </div>
+                      {lastTxSignature && (
+                        <a
+                          href={`https://solscan.io/tx/${lastTxSignature}?cluster=devnet`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block mt-3 text-[10px] text-white/20 hover:text-white/40 transition-colors text-center"
+                        >
+                          View last tx ↗
+                        </a>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
             {/* Direction Toggle - Minimal */}
-            <div className="flex justify-center mb-10">
+            <div className="flex justify-center mb-8">
               <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/5">
                 <button
                   onClick={() => { setDirection('sell'); setAmount(''); }}
@@ -144,21 +233,21 @@ export function TradeInterface({
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="0"
-                  className="w-full bg-transparent text-6xl md:text-7xl font-extralight text-center
+                  className="w-full bg-transparent text-5xl md:text-6xl font-extralight text-center
                            outline-none placeholder:text-white/10"
                   style={{ caretColor: 'white' }}
                 />
                 <motion.span
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 text-xl text-white/20"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 text-lg text-white/20"
                 >
                   {currency}
                 </motion.span>
               </div>
 
               {/* Balance & Max */}
-              <div className="flex items-center justify-center gap-4 mt-4">
+              <div className="flex items-center justify-center gap-4 mt-3">
                 <span className="text-xs text-white/30">
                   Available: {direction === 'sell' ? shieldedSol.toFixed(4) : shieldedUsdc.toFixed(2)} {currency}
                 </span>
@@ -176,7 +265,7 @@ export function TradeInterface({
                 <motion.p
                   initial={{ opacity: 0, y: -5 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="text-sm text-red-400/80 mt-4"
+                  className="text-sm text-red-400/80 mt-3"
                 >
                   Exceeds available balance
                 </motion.p>
@@ -219,89 +308,6 @@ export function TradeInterface({
                 {showError}
               </motion.p>
             )}
-
-            {/* Vault Toggle */}
-            <motion.button
-              onClick={() => setShowVault(!showVault)}
-              className="mt-8 text-xs text-white/30 hover:text-white/50 transition-colors"
-            >
-              {showVault ? 'Hide' : 'Manage'} Vault
-            </motion.button>
-
-            {/* Vault Panel */}
-            <AnimatePresence>
-              {showVault && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="pt-8 pb-4">
-                    {/* Balances */}
-                    <div className="grid grid-cols-2 gap-8 mb-6">
-                      <div>
-                        <p className="text-[10px] text-white/30 uppercase tracking-wider mb-2">Shielded</p>
-                        <p className="text-lg font-light">{shieldedSol.toFixed(4)} <span className="text-white/40">SOL</span></p>
-                        <p className="text-lg font-light">{shieldedUsdc.toFixed(2)} <span className="text-white/40">USDC</span></p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-white/30 uppercase tracking-wider mb-2">Wallet</p>
-                        <p className="text-lg font-light text-white/60">{walletSol.toFixed(4)} <span className="text-white/30">SOL</span></p>
-                        <p className="text-lg font-light text-white/60">{walletUsdc.toFixed(2)} <span className="text-white/30">USDC</span></p>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex flex-wrap justify-center gap-2">
-                      <button
-                        onClick={() => onDeposit('sol')}
-                        className="px-4 py-2 text-xs text-white/50 border border-white/10 rounded-full
-                                 hover:border-white/30 hover:text-white/70 transition-all"
-                      >
-                        + SOL
-                      </button>
-                      <button
-                        onClick={() => onDeposit('usdc')}
-                        disabled={walletUsdc === 0}
-                        className="px-4 py-2 text-xs text-white/50 border border-white/10 rounded-full
-                                 hover:border-white/30 hover:text-white/70 transition-all disabled:opacity-30"
-                      >
-                        + USDC
-                      </button>
-                      <button
-                        onClick={() => onWithdraw('sol')}
-                        disabled={shieldedSol === 0}
-                        className="px-4 py-2 text-xs text-white/50 border border-white/10 rounded-full
-                                 hover:border-white/30 hover:text-white/70 transition-all disabled:opacity-30"
-                      >
-                        − SOL
-                      </button>
-                      <button
-                        onClick={() => onWithdraw('usdc')}
-                        disabled={shieldedUsdc === 0}
-                        className="px-4 py-2 text-xs text-white/50 border border-white/10 rounded-full
-                                 hover:border-white/30 hover:text-white/70 transition-all disabled:opacity-30"
-                      >
-                        − USDC
-                      </button>
-                    </div>
-
-                    {/* Last TX */}
-                    {lastTxSignature && (
-                      <a
-                        href={`https://solscan.io/tx/${lastTxSignature}?cluster=devnet`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block mt-4 text-[10px] text-white/20 hover:text-white/40 transition-colors"
-                      >
-                        View last transaction ↗
-                      </a>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
 
             {/* How it works - Ultra minimal */}
             <div className="mt-12 pt-8 border-t border-white/5">
@@ -429,7 +435,7 @@ export function TradeInterface({
               transition={{ delay: 0.6 }}
               className="text-white/40 font-light mb-6"
             >
-              Added to the swarm pool
+              Added to Dark Liquidity Pool
             </motion.p>
 
             {/* Info */}
@@ -441,7 +447,7 @@ export function TradeInterface({
             >
               <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
               <span className="text-xs text-white/50">
-                Executes when 3+ intents accumulate
+                Intent encrypted • Batch execution pending
               </span>
             </motion.div>
 

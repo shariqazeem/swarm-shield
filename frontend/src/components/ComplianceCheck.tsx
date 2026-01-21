@@ -50,55 +50,70 @@ export function ComplianceCheck({
         <>
           <h1 className="text-5xl md:text-7xl font-extralight tracking-tight mb-6">
             Verifying
-            <span className="text-white/40">.</span>
             <motion.span
               animate={{ opacity: [0.4, 1, 0.4] }}
               transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
               className="text-white/40"
             >
-              .
-            </motion.span>
-            <motion.span
-              animate={{ opacity: [0.4, 1, 0.4] }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut", delay: 0.3 }}
-              className="text-white/40"
-            >
-              .
+              ...
             </motion.span>
           </h1>
 
-          {/* Scanning line animation */}
-          <div className="relative h-[2px] w-64 mx-auto mb-8 bg-white/10 overflow-hidden rounded-full">
-            <motion.div
-              className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/80 to-transparent"
-              animate={{ x: ['-100%', '400%'] }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-            />
-          </div>
-
-          <p className="text-lg text-white/40 font-light mb-4">
-            Screening wallet compliance
-          </p>
-
-          {/* Wallet address with typing effect */}
+          {/* Wallet address */}
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="text-sm text-white/20 font-mono tracking-wider"
+            className="text-sm text-white/20 font-mono tracking-wider mb-10"
           >
-            {walletAddress ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : ''}
+            {walletAddress ? `${walletAddress.slice(0, 8)}...${walletAddress.slice(-8)}` : ''}
           </motion.p>
 
-          {/* Subtle API indicator */}
+          {/* Granular Compliance Checks - Animated Sequence */}
+          <div className="space-y-3 max-w-xs mx-auto">
+            {[
+              { label: 'OFAC Sanctions', delay: 0.2 },
+              { label: 'Risk Assessment', delay: 0.6 },
+              { label: 'Wallet History', delay: 1.0 },
+              { label: 'Entity Screening', delay: 1.4 },
+            ].map((check, index) => (
+              <motion.div
+                key={check.label}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: check.delay }}
+                className="flex items-center justify-between py-2 border-b border-white/5"
+              >
+                <span className="text-xs text-white/40">{check.label}</span>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: check.delay + 0.3 }}
+                  className="flex items-center gap-2"
+                >
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: check.delay + 0.4, type: "spring" }}
+                    className="w-1.5 h-1.5 bg-green-400 rounded-full"
+                  />
+                  <span className="text-[10px] text-green-400/80 uppercase tracking-wider">
+                    Pass
+                  </span>
+                </motion.div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Range Protocol branding */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
-            className="mt-12 flex items-center justify-center gap-2"
+            className="mt-10 flex items-center justify-center gap-2"
           >
             <span className="w-1.5 h-1.5 bg-purple-500/60 rounded-full animate-pulse" />
             <span className="text-[10px] text-white/20 uppercase tracking-widest">
-              Range Protocol
+              Secured by Range Protocol
             </span>
           </motion.div>
         </>
