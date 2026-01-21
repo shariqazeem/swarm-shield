@@ -6,12 +6,29 @@ import {
   TransactionInstruction,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
-import { BN } from "bn.js";
+
+// SPL Memo Program for transaction descriptions
+const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+import {
+  TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddress,
+  createAssociatedTokenAccountInstruction,
+} from "@solana/spl-token";
+import BN from "bn.js";
 import { sha256 } from "js-sha256";
 
+// Type alias for BN
+type BNType = InstanceType<typeof BN>;
+
 // Program ID
-export const PROGRAM_ID = "F5zRCquhMHFrGJjrgmSoMmv1Pdo6N1io4eRA5H8UcVZu";
+export const PROGRAM_ID = "5rLQtJrr27bt4y7ERMgnQUcALKXfy2uTgEdq7rfbQvew";
 export const SWARM_SHIELD_PROGRAM_ID = new PublicKey(PROGRAM_ID);
+
+// SwarmUSDC token mint (devnet) - REAL SPL token for actual transfers
+export const SWARM_USDC_MINT = new PublicKey("8ypRqPnaiegfw9if3R2JZpqLsfr4YHjfPtxUz8YgdkuJ");
+
+// Vault's token account for SwarmUSDC
+export const VAULT_USDC_ACCOUNT = new PublicKey("91SVXnhuqdE56AdSZ9wRW9vfzS2TGrVuKACLBEPtWVqS");
 
 // PDA Seeds
 const CONFIG_SEED = "config";
@@ -24,9 +41,9 @@ const BATCH_SEED = "batch";
 export interface SwarmConfig {
   authority: PublicKey;
   keeper: PublicKey;
-  totalAgents: BN;
-  totalBatches: BN;
-  totalVolumeProtected: BN;
+  totalAgents: BNType;
+  totalBatches: BNType;
+  totalVolumeProtected: BNType;
   minBatchSize: number;
   maxBatchSize: number;
   bump: number;
@@ -35,9 +52,9 @@ export interface SwarmConfig {
 export interface ShieldedAgent {
   authority: PublicKey;
   agentIdHash: number[];
-  solBalance: BN;
-  usdcBalance: BN;
-  nonce: BN;
+  solBalance: BNType;
+  usdcBalance: BNType;
+  nonce: BNType;
   isActive: boolean;
   bump: number;
 }
@@ -45,9 +62,9 @@ export interface ShieldedAgent {
 export interface TradeIntent {
   agent: PublicKey;
   intentType: number;
-  amount: BN;
-  minOutput: BN;
-  expirySlot: BN;
+  amount: BNType;
+  minOutput: BNType;
+  expirySlot: BNType;
   isPending: boolean;
   bump: number;
 }
@@ -56,6 +73,16 @@ export interface TradeIntent {
 function getDiscriminator(name: string): Buffer {
   const hash = sha256.array(`global:${name}`);
   return Buffer.from(hash.slice(0, 8));
+}
+
+// Create memo instruction for transaction descriptions
+// Note: SPL Memo v2 doesn't require signers, the message is just logged
+function createMemoInstruction(message: string): TransactionInstruction {
+  return new TransactionInstruction({
+    keys: [], // No keys required for memo
+    programId: MEMO_PROGRAM_ID,
+    data: Buffer.from(message, "utf-8"),
+  });
 }
 
 // Helper to find PDAs
@@ -340,7 +367,12 @@ export class SwarmShieldClient {
       data,
     });
 
-    const tx = new Transaction().add(instruction);
+    // Add memo for wallet display
+    const memo = createMemoInstruction(
+      `SwarmShield: Deposit ${amountSol} SOL to shielded vault`
+    );
+
+    const tx = new Transaction().add(memo).add(instruction);
     tx.feePayer = authority;
     const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
@@ -416,7 +448,16 @@ export class SwarmShieldClient {
       data,
     });
 
-    const tx = new Transaction().add(instruction);
+    // Add memo for wallet display
+    const amountDisplay = intentType === "sell"
+      ? `${(amountLamports.toNumber() / LAMPORTS_PER_SOL).toFixed(4)} SOL`
+      : `${(amountLamports.toNumber() / 1e6).toFixed(2)} USDC`;
+    const outputType = intentType === "sell" ? "USDC" : "SOL";
+    const memo = createMemoInstruction(
+      `SwarmShield: ${intentType === "sell" ? "Sell" : "Buy"} Intent - ${amountDisplay} → ${outputType}`
+    );
+
+    const tx = new Transaction().add(memo).add(instruction);
     tx.feePayer = authority;
     const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
@@ -515,7 +556,12 @@ export class SwarmShieldClient {
       data,
     });
 
-    const tx = new Transaction().add(instruction);
+    // Add memo for wallet display
+    const memo = createMemoInstruction(
+      `SwarmShield: Withdraw ${amountSol.toFixed(4)} SOL from vault`
+    );
+
+    const tx = new Transaction().add(memo).add(instruction);
     tx.feePayer = authority;
     const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
@@ -548,6 +594,162 @@ export class SwarmShieldClient {
   async getSolBalance(pubkey: PublicKey): Promise<number> {
     const balance = await this.connection.getBalance(pubkey);
     return balance / LAMPORTS_PER_SOL;
+  }
+
+  // Withdraw USDC (SwarmUSDC) - REAL SPL TOKEN TRANSFER!
+  async withdrawUsdc(authority: PublicKey, amount: number): Promise<string> {
+    if (!this.wallet) throw new Error("Wallet not connected");
+
+    const [agentPDA] = findAgentPDA(authority);
+    const [vaultPDA] = findVaultPDA();
+
+    // Get user's ATA for SwarmUSDC (create if needed)
+    const userUsdcAccount = await getAssociatedTokenAddress(
+      SWARM_USDC_MINT,
+      authority
+    );
+
+    // Amount in token units (6 decimals)
+    const amountUnits = new BN(amount * 1e6);
+
+    // Build instruction data: discriminator + amount (u64 le)
+    const discriminator = getDiscriminator("withdraw_usdc");
+    const data = Buffer.concat([
+      discriminator,
+      amountUnits.toArrayLike(Buffer, "le", 8),
+    ]);
+
+    const tx = new Transaction();
+
+    // Add memo first for wallet display
+    const memo = createMemoInstruction(
+      `SwarmShield: Withdraw ${amount.toFixed(2)} USDC to wallet`
+    );
+    tx.add(memo);
+
+    // Check if user has ATA, if not create it
+    const userAtaInfo = await this.connection.getAccountInfo(userUsdcAccount);
+    if (!userAtaInfo) {
+      tx.add(
+        createAssociatedTokenAccountInstruction(
+          authority, // payer
+          userUsdcAccount, // ata
+          authority, // owner
+          SWARM_USDC_MINT // mint
+        )
+      );
+    }
+
+    // Add withdraw instruction
+    const instruction = new TransactionInstruction({
+      keys: [
+        { pubkey: agentPDA, isSigner: false, isWritable: true },
+        { pubkey: userUsdcAccount, isSigner: false, isWritable: true },
+        { pubkey: VAULT_USDC_ACCOUNT, isSigner: false, isWritable: true },
+        { pubkey: vaultPDA, isSigner: false, isWritable: false },
+        { pubkey: authority, isSigner: true, isWritable: true },
+        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      ],
+      programId: SWARM_SHIELD_PROGRAM_ID,
+      data,
+    });
+
+    tx.add(instruction);
+    tx.feePayer = authority;
+    const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+
+    const signedTx = await this.wallet.signTransaction(tx);
+    const signature = await this.connection.sendRawTransaction(signedTx.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: "confirmed",
+    });
+
+    const confirmation = await this.connection.confirmTransaction({
+      signature,
+      blockhash,
+      lastValidBlockHeight,
+    });
+
+    if (confirmation.value.err) {
+      throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+    }
+
+    return signature;
+  }
+
+  // Get user's SwarmUSDC balance (real tokens)
+  async getSwarmUsdcBalance(owner: PublicKey): Promise<number> {
+    try {
+      const ata = await getAssociatedTokenAddress(SWARM_USDC_MINT, owner);
+      const balance = await this.connection.getTokenAccountBalance(ata);
+      return parseFloat(balance.value.uiAmountString || "0");
+    } catch {
+      return 0;
+    }
+  }
+
+  // Deposit USDC (SwarmUSDC) from wallet to shielded vault
+  async depositUsdc(authority: PublicKey, amount: number): Promise<string> {
+    if (!this.wallet) throw new Error("Wallet not connected");
+
+    const [agentPDA] = findAgentPDA(authority);
+
+    // Get user's ATA for SwarmUSDC
+    const userUsdcAccount = await getAssociatedTokenAddress(
+      SWARM_USDC_MINT,
+      authority
+    );
+
+    // Amount in token units (6 decimals)
+    const amountUnits = new BN(amount * 1e6);
+
+    // Build instruction data: discriminator + amount (u64 le)
+    const discriminator = getDiscriminator("deposit_usdc");
+    const data = Buffer.concat([
+      discriminator,
+      amountUnits.toArrayLike(Buffer, "le", 8),
+    ]);
+
+    const instruction = new TransactionInstruction({
+      keys: [
+        { pubkey: agentPDA, isSigner: false, isWritable: true },
+        { pubkey: userUsdcAccount, isSigner: false, isWritable: true },
+        { pubkey: VAULT_USDC_ACCOUNT, isSigner: false, isWritable: true },
+        { pubkey: authority, isSigner: true, isWritable: true },
+        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      ],
+      programId: SWARM_SHIELD_PROGRAM_ID,
+      data,
+    });
+
+    // Add memo for wallet display
+    const memo = createMemoInstruction(
+      `SwarmShield: Deposit ${amount.toFixed(2)} USDC to shielded vault`
+    );
+
+    const tx = new Transaction().add(memo).add(instruction);
+    tx.feePayer = authority;
+    const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+
+    const signedTx = await this.wallet.signTransaction(tx);
+    const signature = await this.connection.sendRawTransaction(signedTx.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: "confirmed",
+    });
+
+    const confirmation = await this.connection.confirmTransaction({
+      signature,
+      blockhash,
+      lastValidBlockHeight,
+    });
+
+    if (confirmation.value.err) {
+      throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+    }
+
+    return signature;
   }
 }
 

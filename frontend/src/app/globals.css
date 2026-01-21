@@ -2,15 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Import fonts */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+/* Import premium fonts - SF Pro inspired */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600&display=swap');
 
 :root {
-  --void: #000000;
-  --matrix: #00FF00;
-  --mev-red: #FF0000;
-  --cyber: #00FFFF;
-  --shield: #8B5CF6;
+  --background: #000000;
+  --foreground: #ffffff;
 }
 
 * {
@@ -23,120 +20,86 @@ html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-  background-color: var(--void);
-  color: var(--matrix);
-  font-family: 'JetBrains Mono', monospace;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar Styling */
+/* Minimal scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0a0a0a;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1a1a1a;
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #00FF0044;
+  background: rgba(255, 255, 255, 0.2);
 }
 
-/* Custom Classes */
-@layer components {
-  .terminal-border {
-    @apply border border-matrix/30 rounded-lg;
-    box-shadow: 0 0 10px rgba(0, 255, 0, 0.1);
-  }
-
-  .terminal-glow {
-    box-shadow: 0 0 10px rgba(0, 255, 0, 0.3),
-                0 0 20px rgba(0, 255, 0, 0.2),
-                0 0 30px rgba(0, 255, 0, 0.1);
-  }
-
-  .mev-glow {
-    box-shadow: 0 0 10px rgba(255, 0, 0, 0.3),
-                0 0 20px rgba(255, 0, 0, 0.2),
-                0 0 30px rgba(255, 0, 0, 0.1);
-  }
-
-  .shield-glow {
-    box-shadow: 0 0 10px rgba(139, 92, 246, 0.3),
-                0 0 20px rgba(139, 92, 246, 0.2),
-                0 0 30px rgba(139, 92, 246, 0.1);
-  }
-
-  .glass-dark {
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(0, 255, 0, 0.1);
-  }
-
-  .scanline {
-    position: relative;
-    overflow: hidden;
-  }
-
-  .scanline::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(
-      transparent 50%,
-      rgba(0, 0, 0, 0.1) 50%
-    );
-    background-size: 100% 4px;
-    pointer-events: none;
-    opacity: 0.3;
-  }
-
-  .grid-bg {
-    background-image:
-      linear-gradient(rgba(0, 255, 0, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0, 255, 0, 0.03) 1px, transparent 1px);
-    background-size: 50px 50px;
-  }
-
-  .text-glow {
-    text-shadow: 0 0 10px currentColor;
-  }
-
-  .btn-matrix {
-    @apply px-6 py-3 bg-matrix/10 border border-matrix/50 text-matrix rounded-lg
-           hover:bg-matrix/20 hover:border-matrix transition-all duration-300;
-  }
-
-  .btn-matrix:hover {
-    box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
-  }
+/* Wallet button styling - make it match our design */
+.wallet-adapter-button {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 9999px !important;
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 500 !important;
+  font-size: 14px !important;
+  padding: 10px 20px !important;
+  transition: all 0.2s ease !important;
 }
 
-/* Animations */
-@keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
+.wallet-adapter-button:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
 }
 
-.cursor-blink::after {
-  content: '█';
-  animation: blink 1s step-end infinite;
+.wallet-adapter-button-trigger {
+  background: white !important;
+  color: black !important;
 }
 
-/* Particle effect base */
-.particle {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  background: var(--matrix);
-  border-radius: 50%;
-  pointer-events: none;
+.wallet-adapter-dropdown-list {
+  background: rgba(20, 20, 20, 0.95) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+}
+
+.wallet-adapter-dropdown-list-item {
+  font-family: 'Inter', sans-serif !important;
+}
+
+/* Selection color */
+::selection {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Focus styles */
+input:focus {
+  outline: none;
+}
+
+button:focus {
+  outline: none;
+}
+
+/* Number input - remove spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
 }

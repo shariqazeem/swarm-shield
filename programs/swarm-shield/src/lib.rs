@@ -21,11 +21,15 @@
 //! - PNP Exchange ($2.5k): AI Agent infrastructure
 
 use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 // Light Protocol ZK Compression imports
 // Note: In production, these would be the actual light-sdk imports
 // For hackathon demo, we show the architecture and integration points
 
-declare_id!("F5zRCquhMHFrGJjrgmSoMmv1Pdo6N1io4eRA5H8UcVZu");
+declare_id!("5rLQtJrr27bt4y7ERMgnQUcALKXfy2uTgEdq7rfbQvew");
+
+// SwarmUSDC token mint (devnet) - our test token for real swaps
+pub const SWARM_USDC_MINT: &str = "8ypRqPnaiegfw9if3R2JZpqLsfr4YHjfPtxUz8YgdkuJ";
 
 // ============================================================================
 // PROGRAM STATE
@@ -277,6 +281,39 @@ pub mod swarm_shield {
         Ok(())
     }
 
+    /// Deposit USDC into shielded vault
+    pub fn deposit_usdc(ctx: Context<DepositUsdc>, amount: u64) -> Result<()> {
+        require!(amount > 0, SwarmShieldError::InvalidAmount);
+
+        // Transfer USDC from user to vault
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.user_usdc_account.to_account_info(),
+            to: ctx.accounts.vault_usdc_account.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        token::transfer(cpi_ctx, amount)?;
+
+        // Update agent balance
+        let agent = &mut ctx.accounts.agent;
+        agent.usdc_balance = agent.usdc_balance.checked_add(amount)
+            .ok_or(SwarmShieldError::Overflow)?;
+        agent.nonce += 1;
+
+        msg!("Deposited {} USDC to shielded vault", amount);
+
+        // Emit event
+        emit!(DepositEvent {
+            agent: agent.key(),
+            amount,
+            new_balance: agent.usdc_balance,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
     /// Submit a shielded trade intent
     /// This is THE KEY MEV PROTECTION - intent is hidden until batch execution
     pub fn submit_intent(
@@ -390,13 +427,27 @@ pub mod swarm_shield {
             let intent_account = &remaining[idx];
             let agent_account = &remaining[idx + 1];
 
-            // Deserialize intent
-            let intent_data = intent_account.try_borrow_data()?;
+            // Deserialize intent (mutable to mark as settled)
+            let mut intent_data = intent_account.try_borrow_mut_data()?;
             let intent_disc_len = 8;
             if intent_data.len() < intent_disc_len + 59 {
                 continue; // Skip invalid account
             }
 
+            // TradeIntent layout after discriminator:
+            // agent(32) + intent_type(1) + amount(8) + min_output(8) + expiry_slot(8) + is_pending(1) + bump(1)
+            let is_pending_offset = intent_disc_len + 57; // 8 + 32 + 1 + 8 + 8 + 8 = 65, so offset 57 from disc
+
+            // Check if intent is still pending - skip if already settled
+            if intent_data[is_pending_offset] != 1 {
+                msg!("Skipping intent #{} - already settled", i);
+                continue;
+            }
+
+            // Read intent_type (offset 32 after discriminator)
+            let intent_type = intent_data[intent_disc_len + 32];
+
+            // Read intent amount (offset 33 after discriminator)
             let intent_amount_bytes: [u8; 8] = intent_data[intent_disc_len + 33..intent_disc_len + 41]
                 .try_into()
                 .map_err(|_| SwarmShieldError::InvalidAmount)?;
@@ -413,38 +464,94 @@ pub mod swarm_shield {
             // Deserialize agent account
             let mut agent_data = agent_account.try_borrow_mut_data()?;
             let agent_disc_len = 8;
-            if agent_data.len() < agent_disc_len + 57 {
+            // ShieldedAgent: authority(32) + agent_id_hash(32) + sol(8) + usdc(8) + nonce(8) + active(1) + bump(1) = 90
+            if agent_data.len() < agent_disc_len + 90 {
+                msg!("Skipping invalid agent account with len {}", agent_data.len());
                 continue; // Skip invalid account
             }
 
-            // Read current SOL balance (offset 40 after discriminator)
-            let balance_offset = agent_disc_len + 40;
-            let current_balance_bytes: [u8; 8] = agent_data[balance_offset..balance_offset + 8]
-                .try_into()
-                .map_err(|_| SwarmShieldError::Overflow)?;
-            let current_balance = u64::from_le_bytes(current_balance_bytes);
+            // Agent layout: discriminator(8) + authority(32) + agent_id_hash(32) + sol_balance(8) + usdc_balance(8)
+            let sol_balance_offset = agent_disc_len + 64;  // After authority(32) + agent_id_hash(32)
+            let usdc_balance_offset = agent_disc_len + 72; // After sol_balance(8)
 
-            // Deduct input amount (agent spent this)
-            let balance_after_deduction = current_balance
-                .checked_sub(intent_amount)
-                .ok_or(SwarmShieldError::InsufficientBalance)?;
+            // Settlement based on intent type:
+            // BUY SOL (type 0): Spend USDC → Receive SOL
+            // SELL SOL (type 1): Spend SOL → Receive USDC
 
-            // Add output share (agent received this from swap)
-            let new_balance = balance_after_deduction
-                .checked_add(output_share)
-                .ok_or(SwarmShieldError::Overflow)?;
+            if intent_type == 0 {
+                // BUY SOL: Deduct USDC, Add SOL
 
-            // Write new balance back
-            agent_data[balance_offset..balance_offset + 8].copy_from_slice(&new_balance.to_le_bytes());
+                // Read current USDC balance
+                let current_usdc_bytes: [u8; 8] = agent_data[usdc_balance_offset..usdc_balance_offset + 8]
+                    .try_into()
+                    .map_err(|_| SwarmShieldError::Overflow)?;
+                let current_usdc = u64::from_le_bytes(current_usdc_bytes);
 
-            msg!(
-                "Settled intent #{}: Input {} → Output {} (balance {} → {})",
-                i,
-                intent_amount,
-                output_share,
-                current_balance,
-                new_balance
-            );
+                // Deduct USDC spent
+                let new_usdc = current_usdc
+                    .checked_sub(intent_amount)
+                    .ok_or(SwarmShieldError::InsufficientBalance)?;
+
+                // Read current SOL balance
+                let current_sol_bytes: [u8; 8] = agent_data[sol_balance_offset..sol_balance_offset + 8]
+                    .try_into()
+                    .map_err(|_| SwarmShieldError::Overflow)?;
+                let current_sol = u64::from_le_bytes(current_sol_bytes);
+
+                // Add SOL received
+                let new_sol = current_sol
+                    .checked_add(output_share)
+                    .ok_or(SwarmShieldError::Overflow)?;
+
+                // Write new balances
+                agent_data[usdc_balance_offset..usdc_balance_offset + 8].copy_from_slice(&new_usdc.to_le_bytes());
+                agent_data[sol_balance_offset..sol_balance_offset + 8].copy_from_slice(&new_sol.to_le_bytes());
+
+                msg!(
+                    "Settled BUY intent #{}: Spent {} USDC → Received {} SOL (USDC: {} → {}, SOL: {} → {})",
+                    i, intent_amount, output_share, current_usdc, new_usdc, current_sol, new_sol
+                );
+
+                // Mark intent as settled
+                intent_data[is_pending_offset] = 0;
+
+            } else {
+                // SELL SOL: Deduct SOL, Add USDC
+
+                // Read current SOL balance
+                let current_sol_bytes: [u8; 8] = agent_data[sol_balance_offset..sol_balance_offset + 8]
+                    .try_into()
+                    .map_err(|_| SwarmShieldError::Overflow)?;
+                let current_sol = u64::from_le_bytes(current_sol_bytes);
+
+                // Deduct SOL spent
+                let new_sol = current_sol
+                    .checked_sub(intent_amount)
+                    .ok_or(SwarmShieldError::InsufficientBalance)?;
+
+                // Read current USDC balance
+                let current_usdc_bytes: [u8; 8] = agent_data[usdc_balance_offset..usdc_balance_offset + 8]
+                    .try_into()
+                    .map_err(|_| SwarmShieldError::Overflow)?;
+                let current_usdc = u64::from_le_bytes(current_usdc_bytes);
+
+                // Add USDC received
+                let new_usdc = current_usdc
+                    .checked_add(output_share)
+                    .ok_or(SwarmShieldError::Overflow)?;
+
+                // Write new balances
+                agent_data[sol_balance_offset..sol_balance_offset + 8].copy_from_slice(&new_sol.to_le_bytes());
+                agent_data[usdc_balance_offset..usdc_balance_offset + 8].copy_from_slice(&new_usdc.to_le_bytes());
+
+                msg!(
+                    "Settled SELL intent #{}: Spent {} SOL → Received {} USDC (SOL: {} → {}, USDC: {} → {})",
+                    i, intent_amount, output_share, current_sol, new_sol, current_usdc, new_usdc
+                );
+
+                // Mark intent as settled
+                intent_data[is_pending_offset] = 0;
+            }
         }
 
         msg!(
@@ -481,8 +588,8 @@ pub mod swarm_shield {
             .ok_or(SwarmShieldError::Overflow)?;
         agent.nonce += 1;
 
-        // Transfer from vault
-        let vault_bump = ctx.accounts.vault.to_account_info().data.borrow()[0];
+        // Transfer from vault - use bump from Anchor's constraint verification
+        let vault_bump = ctx.bumps.vault;
         let seeds = &[b"vault".as_ref(), &[vault_bump]];
         let signer_seeds = &[&seeds[..]];
 
@@ -504,6 +611,45 @@ pub mod swarm_shield {
             agent: agent.key(),
             amount,
             new_balance: agent.sol_balance,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
+    /// Withdraw USDC (SwarmUSDC) from shielded vault - REAL SPL TOKEN TRANSFER
+    pub fn withdraw_usdc(ctx: Context<WithdrawUsdc>, amount: u64) -> Result<()> {
+        let agent = &mut ctx.accounts.agent;
+
+        require!(amount > 0, SwarmShieldError::InvalidAmount);
+        require!(agent.usdc_balance >= amount, SwarmShieldError::InsufficientBalance);
+
+        // Update balance first (checks-effects-interactions)
+        agent.usdc_balance = agent.usdc_balance.checked_sub(amount)
+            .ok_or(SwarmShieldError::Overflow)?;
+        agent.nonce += 1;
+
+        // Transfer REAL tokens from vault to user using vault PDA as authority
+        let vault_bump = ctx.bumps.vault;
+        let seeds = &[b"vault".as_ref(), &[vault_bump]];
+        let signer_seeds = &[&seeds[..]];
+
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.vault_usdc_account.to_account_info(),
+            to: ctx.accounts.user_usdc_account.to_account_info(),
+            authority: ctx.accounts.vault.to_account_info(),
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
+        token::transfer(cpi_ctx, amount)?;
+
+        msg!("Withdrawn {} SwarmUSDC (REAL tokens!) from shielded vault", amount);
+
+        // Emit event
+        emit!(WithdrawalEvent {
+            agent: agent.key(),
+            amount,
+            new_balance: agent.usdc_balance,
             timestamp: Clock::get()?.unix_timestamp,
         });
 
@@ -590,6 +736,30 @@ pub struct DepositSol<'info> {
 }
 
 #[derive(Accounts)]
+pub struct DepositUsdc<'info> {
+    #[account(
+        mut,
+        seeds = [b"agent", authority.key().as_ref()],
+        bump = agent.bump,
+        constraint = agent.authority == authority.key() @ SwarmShieldError::UnauthorizedAgent
+    )]
+    pub agent: Account<'info, ShieldedAgent>,
+
+    /// User's USDC token account (ATA)
+    #[account(mut)]
+    pub user_usdc_account: Account<'info, TokenAccount>,
+
+    /// Vault's USDC token account
+    #[account(mut)]
+    pub vault_usdc_account: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
 pub struct SubmitIntent<'info> {
     #[account(
         mut,
@@ -661,6 +831,38 @@ pub struct WithdrawSol<'info> {
     pub authority: Signer<'info>,
 
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawUsdc<'info> {
+    #[account(
+        mut,
+        seeds = [b"agent", authority.key().as_ref()],
+        bump = agent.bump,
+        constraint = agent.authority == authority.key() @ SwarmShieldError::UnauthorizedAgent
+    )]
+    pub agent: Account<'info, ShieldedAgent>,
+
+    /// User's USDC token account (ATA)
+    #[account(mut)]
+    pub user_usdc_account: Account<'info, TokenAccount>,
+
+    /// Vault's USDC token account
+    #[account(mut)]
+    pub vault_usdc_account: Account<'info, TokenAccount>,
+
+    /// Vault PDA - authority for the vault token account
+    /// CHECK: Validated by seeds
+    #[account(
+        seeds = [b"vault"],
+        bump
+    )]
+    pub vault: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]

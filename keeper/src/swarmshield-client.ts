@@ -11,7 +11,7 @@ import { createHash } from "crypto";
 
 // Program ID
 export const SWARM_SHIELD_PROGRAM_ID = new PublicKey(
-  "F5zRCquhMHFrGJjrgmSoMmv1Pdo6N1io4eRA5H8UcVZu"
+  "5rLQtJrr27bt4y7ERMgnQUcALKXfy2uTgEdq7rfbQvew"
 );
 
 // PDA Seeds
@@ -86,6 +86,36 @@ export class SwarmShieldKeeperClient {
   // Get keeper public key
   getKeeperPublicKey(): PublicKey {
     return this.keeper.publicKey;
+  }
+
+  // Check if a batch PDA already exists
+  async batchExists(batchId: BN): Promise<boolean> {
+    try {
+      const [batchPDA] = findBatchPDA(batchId);
+      const account = await this.connection.getAccountInfo(batchPDA);
+      return account !== null;
+    } catch {
+      return false;
+    }
+  }
+
+  // Find the next available batch ID (skips existing ones from failed attempts)
+  async findNextAvailableBatchId(startingId: BN): Promise<BN> {
+    let batchId = startingId;
+    let attempts = 0;
+    const maxAttempts = 10; // Don't search forever
+
+    while (attempts < maxAttempts) {
+      const exists = await this.batchExists(batchId);
+      if (!exists) {
+        return batchId;
+      }
+      console.log(`  ⚠️  Batch #${batchId.toString()} already exists, trying next...`);
+      batchId = batchId.addn(1);
+      attempts++;
+    }
+
+    throw new Error(`Could not find available batch ID after ${maxAttempts} attempts`);
   }
 
   // Get config
@@ -182,27 +212,46 @@ export class SwarmShieldKeeperClient {
 
     tx.sign(this.keeper);
 
-    const signature = await this.connection.sendRawTransaction(
-      tx.serialize(),
-      {
-        skipPreflight: false,
-        preflightCommitment: "confirmed",
-      }
-    );
-
-    const confirmation = await this.connection.confirmTransaction({
-      signature,
-      blockhash,
-      lastValidBlockHeight,
-    });
-
-    if (confirmation.value.err) {
-      throw new Error(
-        `Batch execution failed: ${JSON.stringify(confirmation.value.err)}`
+    try {
+      const signature = await this.connection.sendRawTransaction(
+        tx.serialize(),
+        {
+          skipPreflight: false,
+          preflightCommitment: "confirmed",
+        }
       );
-    }
 
-    return signature;
+      const confirmation = await this.connection.confirmTransaction({
+        signature,
+        blockhash,
+        lastValidBlockHeight,
+      });
+
+      if (confirmation.value.err) {
+        throw new Error(
+          `Batch execution failed: ${JSON.stringify(confirmation.value.err)}`
+        );
+      }
+
+      return signature;
+    } catch (error: any) {
+      // Extract and log simulation error details
+      if (error.logs) {
+        console.error("\n📋 Transaction Logs:");
+        error.logs.forEach((log: string) => console.error(`   ${log}`));
+      }
+
+      // Parse common error codes for better error messages
+      const errStr = error.message || "";
+      if (errStr.includes("Custom:0")) {
+        console.error("\n❓ Error: Custom:0 = AccountAlreadyInUse (batch PDA already exists)");
+        console.error("   Try incrementing batch ID or check for orphan batch accounts");
+      } else if (errStr.includes("Custom:1")) {
+        console.error("\n❓ Error: Custom:1 = InsufficientFunds (not enough SOL for fees)");
+      }
+
+      throw error;
+    }
   }
 
   // Get all program accounts (intents)

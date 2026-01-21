@@ -45,31 +45,33 @@ export default function IntentForm({ onSubmit, isConnected }: IntentFormProps) {
         <button
           type="button"
           onClick={() => setIntentType("buy")}
-          className={`py-3 rounded-lg font-mono text-sm transition-all ${
+          className={`py-3 px-2 rounded-lg font-mono text-sm transition-all ${
             intentType === "buy"
               ? "bg-matrix/20 border border-matrix text-matrix"
               : "bg-void border border-matrix/30 text-matrix/60 hover:border-matrix/50"
           }`}
         >
-          Buy SOL
+          <div className="font-bold">Buy SOL</div>
+          <div className="text-xs opacity-60">Spend USDC</div>
         </button>
         <button
           type="button"
           onClick={() => setIntentType("sell")}
-          className={`py-3 rounded-lg font-mono text-sm transition-all ${
+          className={`py-3 px-2 rounded-lg font-mono text-sm transition-all ${
             intentType === "sell"
               ? "bg-cyber/20 border border-cyber text-cyber"
               : "bg-void border border-matrix/30 text-matrix/60 hover:border-matrix/50"
           }`}
         >
-          Sell SOL
+          <div className="font-bold">Sell SOL</div>
+          <div className="text-xs opacity-60">Get USDC</div>
         </button>
       </div>
 
       {/* Amount Input */}
       <div>
         <label className="block text-xs text-matrix/40 uppercase tracking-wider mb-2">
-          Amount (SOL)
+          {intentType === "buy" ? "Amount (USDC to spend)" : "Amount (SOL to sell)"}
         </label>
         <div className="relative">
           <input
@@ -83,11 +85,13 @@ export default function IntentForm({ onSubmit, isConnected }: IntentFormProps) {
                      focus:outline-none focus:border-matrix placeholder:text-matrix/20"
           />
           <div className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-matrix/60 font-mono">
-            SOL
+            {intentType === "buy" ? "USDC" : "SOL"}
           </div>
         </div>
         <p className="mt-1 text-xs text-matrix/40">
-          {intentType === "buy" ? "Amount of SOL you want to buy" : "Amount of SOL you want to sell"}
+          {intentType === "buy"
+            ? "Swap USDC → SOL at best rate"
+            : "Swap SOL → USDC at best rate"}
         </p>
       </div>
 

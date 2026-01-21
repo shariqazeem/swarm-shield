@@ -103,7 +103,7 @@ export default function Header({ walletBalance }: HeaderProps) {
           <ExternalLink className="w-3 h-3 text-shield/60" />
           <span className="text-shield/40 mx-2">|</span>
           <a
-            href={`https://solscan.io/account/F5zRCquhMHFrGJjrgmSoMmv1Pdo6N1io4eRA5H8UcVZu?cluster=devnet`}
+            href={`https://solscan.io/account/5rLQtJrr27bt4y7ERMgnQUcALKXfy2uTgEdq7rfbQvew?cluster=devnet`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-matrix/60 hover:text-matrix transition-colors flex items-center gap-1"

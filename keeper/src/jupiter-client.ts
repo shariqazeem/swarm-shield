@@ -1,13 +1,22 @@
 import { Connection, PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import BN from "bn.js";
 
-// Jupiter API endpoints
+// Jupiter API endpoints (using mainnet API for quotes, works for price discovery)
 const JUPITER_QUOTE_API = "https://quote-api.jup.ag/v6/quote";
 const JUPITER_SWAP_API = "https://quote-api.jup.ag/v6/swap";
+const JUPITER_PRICE_API = "https://api.jup.ag/price/v2";
 
 // Token mints
 export const SOL_MINT = "So11111111111111111111111111111111111111112";
-export const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+// Circle USDC Devnet (can request from faucet: https://faucet.circle.com)
+export const USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
+// Mainnet USDC for price reference
+const MAINNET_USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+// Cache for SOL price
+let cachedSolPrice: number | null = null;
+let lastPriceFetch: number = 0;
+const PRICE_CACHE_MS = 30000; // Cache price for 30 seconds
 
 export interface JupiterQuote {
   inputMint: string;
@@ -35,6 +44,61 @@ export class JupiterClient {
   ) {}
 
   /**
+   * Fetch live SOL price from CoinGecko API (free, no auth needed)
+   * Returns price in USD
+   */
+  async getLiveSolPrice(): Promise<number> {
+    const now = Date.now();
+
+    // Return cached price if still valid
+    if (cachedSolPrice && (now - lastPriceFetch) < PRICE_CACHE_MS) {
+      return cachedSolPrice;
+    }
+
+    // Try CoinGecko first (free, reliable)
+    try {
+      const response = await fetch(
+        "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd",
+        { headers: { accept: "application/json" } }
+      );
+
+      if (response.ok) {
+        const data = await response.json() as { solana?: { usd?: number } };
+        if (data.solana?.usd) {
+          cachedSolPrice = data.solana.usd;
+          lastPriceFetch = now;
+          console.log(`📊 Live SOL price (CoinGecko): $${cachedSolPrice.toFixed(2)}`);
+          return cachedSolPrice;
+        }
+      }
+    } catch (error) {
+      console.log("CoinGecko API failed, trying Jupiter...");
+    }
+
+    // Fallback to Jupiter
+    try {
+      const response = await fetch(`${JUPITER_PRICE_API}?ids=${SOL_MINT}`);
+
+      if (response.ok) {
+        const data = await response.json() as { data?: { [key: string]: { price?: string } } };
+        const solData = data.data?.[SOL_MINT];
+
+        if (solData?.price) {
+          cachedSolPrice = parseFloat(solData.price);
+          lastPriceFetch = now;
+          console.log(`📊 Live SOL price (Jupiter): $${cachedSolPrice.toFixed(2)}`);
+          return cachedSolPrice;
+        }
+      }
+    } catch (error) {
+      console.log("Jupiter API also failed");
+    }
+
+    console.log(`⚠️ Using cached/fallback price: $${cachedSolPrice || 180}`);
+    return cachedSolPrice || 180;
+  }
+
+  /**
    * Get a quote from Jupiter for a swap
    */
   async getQuote(
@@ -58,7 +122,7 @@ export class JupiterClient {
         return null;
       }
 
-      const quote = await response.json();
+      const quote = await response.json() as JupiterQuote;
       return quote;
     } catch (error) {
       console.error("Error fetching Jupiter quote:", error);
@@ -118,7 +182,7 @@ export class JupiterClient {
         throw new Error(`Jupiter swap API failed: ${swapResponse.statusText}`);
       }
 
-      const { swapTransaction } = await swapResponse.json();
+      const { swapTransaction } = await swapResponse.json() as { swapTransaction: string };
 
       // Deserialize transaction
       const transactionBuf = Buffer.from(swapTransaction, 'base64');
@@ -212,6 +276,50 @@ export class JupiterClient {
     // Apply slippage: output = input * (1 - slippage)
     const slippageFactor = 10000 - slippageBps; // 9950 for 0.5% slippage
     return inputAmount.muln(slippageFactor).divn(10000);
+  }
+
+  /**
+   * Estimate output with realistic SOL/USDC rate for devnet simulation
+   * @param inputAmount - Input amount in smallest units (lamports for SOL, 6 decimals for USDC)
+   * @param direction - "sell" means selling SOL for USDC, "buy" means buying SOL with USDC
+   * @param slippageBps - Slippage in basis points (default 50 = 0.5%)
+   * @param solPrice - Live SOL price in USDC (optional, will use cached if not provided)
+   */
+  estimateOutputWithRate(
+    inputAmount: BN,
+    direction: "buy" | "sell",
+    slippageBps: number = 50,
+    solPrice: number = cachedSolPrice || 180
+  ): BN {
+    // Use live SOL/USDC rate
+    // SOL has 9 decimals (lamports), USDC has 6 decimals
+    const SOL_PRICE_USDC = Math.floor(solPrice);
+
+    const slippageFactor = 10000 - slippageBps; // 9950 for 0.5% slippage
+
+    if (direction === "sell") {
+      // SELL SOL → GET USDC
+      // Convert lamports to USDC: (lamports / 1e9) * price * 1e6 = lamports * price / 1e3
+      const usdcAmount = inputAmount.muln(SOL_PRICE_USDC).divn(1000);
+      return usdcAmount.muln(slippageFactor).divn(10000);
+    } else {
+      // BUY SOL → SPEND USDC
+      // Convert USDC to lamports: (usdc / 1e6) / price * 1e9 = usdc * 1e3 / price
+      const solAmount = inputAmount.muln(1000).divn(SOL_PRICE_USDC);
+      return solAmount.muln(slippageFactor).divn(10000);
+    }
+  }
+
+  /**
+   * Estimate output with LIVE price fetching (async version)
+   */
+  async estimateOutputWithLiveRate(
+    inputAmount: BN,
+    direction: "buy" | "sell",
+    slippageBps: number = 50
+  ): Promise<BN> {
+    const solPrice = await this.getLiveSolPrice();
+    return this.estimateOutputWithRate(inputAmount, direction, slippageBps, solPrice);
   }
 }
 

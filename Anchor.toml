@@ -6,17 +6,22 @@ seeds = false
 skip-lint = false
 
 [programs.localnet]
-swarm_shield = "F5zRCquhMHFrGJjrgmSoMmv1Pdo6N1io4eRA5H8UcVZu"
+swarm_shield = "5rLQtJrr27bt4y7ERMgnQUcALKXfy2uTgEdq7rfbQvew"
 
 [programs.devnet]
-swarm_shield = "F5zRCquhMHFrGJjrgmSoMmv1Pdo6N1io4eRA5H8UcVZu"
+swarm_shield = "5rLQtJrr27bt4y7ERMgnQUcALKXfy2uTgEdq7rfbQvew"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+# Using HELIUS RPC - Privacy Hack 2026 ($5,000 Bounty)
+# High-performance RPC with Photon indexer for ZK Compression
+cluster = "https://devnet.helius-rpc.com/?api-key=873c5824-7255-40c9-9a39-4d3d04efe717"
 wallet = "~/.config/solana/devnet.json"
+
+# Alternative: QuickNode RPC ($3,000 Bounty)
+# cluster = "https://summer-maximum-frost.solana-devnet.quiknode.pro/e554493359261712cfdbfb439ee262f26dafc4ec/"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
@@ -25,7 +30,8 @@ test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
 startup_wait = 5000
 
 [test.validator]
-url = "https://api.devnet.solana.com"
+# Using HELIUS RPC for testing as well
+url = "https://devnet.helius-rpc.com/?api-key=873c5824-7255-40c9-9a39-4d3d04efe717"
 
 # Light Protocol Programs (required for ZK Compression)
 [[test.validator.clone]]

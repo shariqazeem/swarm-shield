@@ -43,21 +43,48 @@ class DarkPoolKeeper {
   }
 
   // Execute swap via Jupiter (real or mock depending on network)
+  // Note: buyVolume is in USDC units (6 decimals), sellVolume is in SOL lamports (9 decimals)
   private async executeSwapWithJupiter(
     buyVolume: BN,
     sellVolume: BN,
     keeperPubkey: any
   ): Promise<{ totalInput: BN; totalOutput: BN }> {
-    // Optimize batch: Net buy/sell orders
-    const optimization = await this.jupiterClient.optimizeBatchRouting(buyVolume, sellVolume);
+    // Get live SOL price for conversion
+    const solPrice = await this.jupiterClient.getLiveSolPrice();
+
+    // Convert to common base (USDC) for comparison
+    // sellVolume (lamports) -> USDC: (lamports / 1e9) * price * 1e6 = lamports * price / 1000
+    const sellVolumeUsdc = sellVolume.muln(Math.floor(solPrice)).divn(1000);
+    // buyVolume is already in USDC units
 
     console.log(`  💱 Batch Optimization:`);
-    console.log(`     Buy Volume: ${buyVolume.toNumber() / LAMPORTS_PER_SOL} SOL`);
-    console.log(`     Sell Volume: ${sellVolume.toNumber() / LAMPORTS_PER_SOL} SOL`);
-    console.log(`     Net Direction: ${optimization.direction}`);
-    console.log(`     Net Volume: ${optimization.netVolume.toNumber() / LAMPORTS_PER_SOL} SOL`);
+    console.log(`     Buy Volume: ${(buyVolume.toNumber() / 1e6).toFixed(2)} USDC`);
+    console.log(`     Sell Volume: ${(sellVolume.toNumber() / LAMPORTS_PER_SOL).toFixed(4)} SOL (~${(sellVolumeUsdc.toNumber() / 1e6).toFixed(2)} USDC)`);
 
-    // Total input is the sum of all amounts
+    // Determine net direction based on USDC values
+    let optimization: { netVolume: BN; direction: "buy" | "sell" | "balanced" };
+    if (buyVolume.gt(sellVolumeUsdc)) {
+      // Net buy: Need to buy SOL with USDC
+      const netUsdc = buyVolume.sub(sellVolumeUsdc);
+      optimization = { netVolume: netUsdc, direction: "buy" };
+    } else if (sellVolumeUsdc.gt(buyVolume)) {
+      // Net sell: Need to sell SOL for USDC
+      // Convert back to SOL: (usdc / 1e6) / price * 1e9 = usdc * 1000 / price
+      const netUsdcDiff = sellVolumeUsdc.sub(buyVolume);
+      const netSol = netUsdcDiff.muln(1000).divn(Math.floor(solPrice));
+      optimization = { netVolume: netSol, direction: "sell" };
+    } else {
+      optimization = { netVolume: new BN(0), direction: "balanced" };
+    }
+
+    console.log(`     Net Direction: ${optimization.direction}`);
+    if (optimization.direction === "buy") {
+      console.log(`     Net Volume: ${(optimization.netVolume.toNumber() / 1e6).toFixed(2)} USDC to buy SOL`);
+    } else if (optimization.direction === "sell") {
+      console.log(`     Net Volume: ${(optimization.netVolume.toNumber() / LAMPORTS_PER_SOL).toFixed(4)} SOL to sell`);
+    }
+
+    // Total input is the sum of all amounts (in their native units)
     const totalInput = buyVolume.add(sellVolume);
 
     if (optimization.direction === "balanced") {
@@ -80,11 +107,14 @@ class DarkPoolKeeper {
 
     if (!quote) {
       console.log(`     ⚠️  Jupiter quote unavailable (expected on devnet - no liquidity)`);
-      console.log(`     📊 Using realistic slippage estimation instead`);
-      const estimatedOutput = this.jupiterClient.estimateOutputWithSlippage(
-        totalInput,
+      console.log(`     📊 Using LIVE price estimation from Jupiter...`);
+      // Use live price estimation
+      const estimatedOutput = await this.jupiterClient.estimateOutputWithLiveRate(
+        optimization.netVolume,
+        optimization.direction as "buy" | "sell",
         50
       );
+      console.log(`     💱 Estimated output: ${estimatedOutput.toString()} (${optimization.direction === "sell" ? "USDC" : "SOL"})`);
       return { totalInput, totalOutput: estimatedOutput };
     }
 
@@ -141,16 +171,44 @@ class DarkPoolKeeper {
       }
       console.log(`   ✅ Active intents: ${activeIntents.length}`);
 
+      // CRITICAL: Separate sell and buy intents - they have different unit types
+      // Sell intents: amount in SOL lamports → receive USDC
+      // Buy intents: amount in USDC units → receive SOL
+      const sellIntents = activeIntents.filter(({ intent }) => intent.intentType === 1);
+      const buyIntents = activeIntents.filter(({ intent }) => intent.intentType === 0);
+
+      console.log(`   📉 Sell intents: ${sellIntents.length}`);
+      console.log(`   📈 Buy intents: ${buyIntents.length}`);
+
+      // Process whichever batch type has enough intents
+      // Prefer the one with more intents, or sell if equal
+      let batchToProcess = null;
+      let batchType = "";
+
+      if (sellIntents.length >= config.minBatchSize && sellIntents.length >= buyIntents.length) {
+        batchToProcess = sellIntents;
+        batchType = "SELL";
+      } else if (buyIntents.length >= config.minBatchSize) {
+        batchToProcess = buyIntents;
+        batchType = "BUY";
+      } else if (sellIntents.length >= config.minBatchSize) {
+        batchToProcess = sellIntents;
+        batchType = "SELL";
+      }
+
       // Check if we have enough for a batch
-      if (activeIntents.length < config.minBatchSize) {
+      if (!batchToProcess) {
         console.log(
-          `⏳ Waiting for more intents (need ${config.minBatchSize}, have ${activeIntents.length})`
+          `⏳ Waiting for more intents of same type (need ${config.minBatchSize} sell or buy)`
         );
+        console.log(`   Current: ${sellIntents.length} sell, ${buyIntents.length} buy`);
         return;
       }
 
-      // Take up to maxBatchSize intents (from active, non-expired intents)
-      const batchIntents = activeIntents.slice(0, config.maxBatchSize);
+      console.log(`\n🎯 Processing ${batchType} batch with ${batchToProcess.length} intents`);
+
+      // Take up to maxBatchSize intents (from selected batch type only)
+      const batchIntents = batchToProcess.slice(0, config.maxBatchSize);
 
       console.log(`\n🔄 Processing batch of ${batchIntents.length} intents:`);
 
@@ -160,9 +218,14 @@ class DarkPoolKeeper {
 
       for (const { pubkey, intent } of batchIntents) {
         const type = intent.intentType === 0 ? "BUY" : "SELL";
-        const amount = intent.amount.toNumber() / LAMPORTS_PER_SOL;
+        // For buy: amount is in USDC units (6 decimals)
+        // For sell: amount is in SOL lamports (9 decimals)
+        const amount = intent.intentType === 0
+          ? intent.amount.toNumber() / 1e6 // USDC
+          : intent.amount.toNumber() / LAMPORTS_PER_SOL; // SOL
+        const unit = intent.intentType === 0 ? "USDC" : "SOL";
 
-        console.log(`  • ${type} ${amount} SOL from ${intent.agent.toBase58().slice(0, 8)}...`);
+        console.log(`  • ${type} ${amount.toFixed(intent.intentType === 0 ? 2 : 4)} ${unit} from ${intent.agent.toBase58().slice(0, 8)}...`);
 
         if (intent.intentType === 0) {
           totalBuyVolume = totalBuyVolume.add(intent.amount);
@@ -187,7 +250,9 @@ class DarkPoolKeeper {
       console.log(`   📈 Protection Rate: ${(BATCH_PROTECTION_RATE * 100).toFixed(1)}%`);
 
       // Execute batch on-chain with settlement
-      const batchId = config.totalBatches;
+      // Find next available batch ID (handles failed attempts that created orphan batch PDAs)
+      const startingBatchId = config.totalBatches;
+      const batchId = await this.client.findNextAvailableBatchId(startingBatchId);
       console.log(`\n⚡ Executing batch #${batchId.toString()} on-chain with settlement...`);
 
       // Prepare intent accounts for settlement
@@ -227,6 +292,11 @@ class DarkPoolKeeper {
     console.log("=".repeat(60));
     console.log(`📡 RPC: ${RPC_URL}`);
     console.log(`⏱️  Poll Interval: ${POLL_INTERVAL_MS}ms`);
+
+    // Fetch live SOL price at startup
+    console.log("\n📊 Fetching live SOL price from Jupiter...");
+    const solPrice = await this.jupiterClient.getLiveSolPrice();
+    console.log(`✅ Live SOL Price: $${solPrice.toFixed(2)} USDC`);
 
     // Verify keeper is authorized
     const config = await this.client.getConfig();
