@@ -7,6 +7,7 @@ import {
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { WalletError } from "@solana/wallet-adapter-base";
+import { HELIUS_CONFIG, QUICKNODE_CONFIG } from "@/lib/rpc-config";
 
 // Import wallet adapter styles
 import "@solana/wallet-adapter-react-ui/styles.css";
@@ -15,12 +16,19 @@ interface Props {
   children: ReactNode;
 }
 
-// Devnet RPC URL
-const DEVNET_RPC = "https://api.devnet.solana.com";
+// RPC endpoints with fallback chain:
+// 1. Helius (primary - $5k bounty + Photon indexer)
+// 2. QuickNode (backup - $3k bounty)
+// 3. Public devnet (last resort)
+const RPC_ENDPOINTS = [
+  HELIUS_CONFIG.rpcUrl,
+  QUICKNODE_CONFIG.endpoint,
+  "https://api.devnet.solana.com",
+];
 
 export const WalletProvider: FC<Props> = ({ children }) => {
-  // Use devnet
-  const endpoint = useMemo(() => DEVNET_RPC, []);
+  // Use Helius RPC as primary (Privacy Hack $5k bounty)
+  const endpoint = useMemo(() => RPC_ENDPOINTS[0], []);
 
   // Empty wallets array - wallet-standard will auto-detect installed wallets
   const wallets = useMemo(() => [], []);
