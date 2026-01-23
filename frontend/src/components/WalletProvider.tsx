@@ -17,17 +17,17 @@ interface Props {
 }
 
 // RPC endpoints with fallback chain:
-// 1. Helius (primary - $5k bounty + Photon indexer)
-// 2. QuickNode (backup - $3k bounty)
+// 1. QuickNode (primary for browser - $3k bounty, best CORS support)
+// 2. Helius (Photon indexer - $5k bounty)
 // 3. Public devnet (last resort)
 const RPC_ENDPOINTS = [
-  HELIUS_CONFIG.rpcUrl,
   QUICKNODE_CONFIG.endpoint,
+  HELIUS_CONFIG.rpcUrl,
   "https://api.devnet.solana.com",
 ];
 
 export const WalletProvider: FC<Props> = ({ children }) => {
-  // Use Helius RPC as primary (Privacy Hack $5k bounty)
+  // Use QuickNode RPC as primary connection (best browser/CORS support)
   const endpoint = useMemo(() => RPC_ENDPOINTS[0], []);
 
   // Empty wallets array - wallet-standard will auto-detect installed wallets

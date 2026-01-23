@@ -64,8 +64,9 @@ export const QUICKNODE_CONFIG = {
 export type RpcProvider = 'helius' | 'quicknode' | 'default';
 
 export function getActiveRpcUrl(): string {
-  // Primary: Helius RPC (Privacy Hack $5k bounty + Photon indexer for Light Protocol)
-  return HELIUS_CONFIG.rpcUrl;
+  // Primary: QuickNode RPC (Privacy Hack $3k bounty - best browser CORS support)
+  // Helius used for enhanced APIs (Photon indexer, priority fees)
+  return QUICKNODE_CONFIG.endpoint;
 }
 
 export function getBackupRpcUrl(): string {
@@ -75,16 +76,12 @@ export function getBackupRpcUrl(): string {
 
 /**
  * Create a Solana connection with sponsor RPC
- * Uses Helius as primary for ZK Compression support
+ * Uses QuickNode as primary for reliability, Helius for enhanced APIs
  */
 export function createConnection(): Connection {
   const rpcUrl = getActiveRpcUrl();
-  console.log('🚀 Connected to Helius RPC (Privacy Hack $5k bounty)');
-  console.log('   Photon Indexer: ENABLED (Light Protocol ZK Compression)');
-  return new Connection(rpcUrl, {
-    commitment: 'confirmed',
-    wsEndpoint: HELIUS_CONFIG.wsUrl,
-  });
+  console.log('Connected to QuickNode RPC (Privacy Hack $3k bounty)');
+  return new Connection(rpcUrl, 'confirmed');
 }
 
 /**
