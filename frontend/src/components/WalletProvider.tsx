@@ -7,6 +7,10 @@ import {
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { WalletError } from "@solana/wallet-adapter-base";
+import {
+  PhantomWalletAdapter,
+  SolflareWalletAdapter,
+} from "@solana/wallet-adapter-wallets";
 import { HELIUS_CONFIG, QUICKNODE_CONFIG } from "@/lib/rpc-config";
 
 // Import wallet adapter styles
@@ -30,8 +34,11 @@ export const WalletProvider: FC<Props> = ({ children }) => {
   // Use QuickNode RPC as primary connection (best browser/CORS support)
   const endpoint = useMemo(() => RPC_ENDPOINTS[0], []);
 
-  // Empty wallets array - wallet-standard will auto-detect installed wallets
-  const wallets = useMemo(() => [], []);
+  // Explicitly include Phantom and Solflare adapters
+  const wallets = useMemo(
+    () => [new PhantomWalletAdapter(), new SolflareWalletAdapter()],
+    []
+  );
 
   // Error handler for wallet errors
   const onError = useCallback((error: WalletError) => {
