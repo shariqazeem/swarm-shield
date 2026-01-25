@@ -2,8 +2,8 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useWallet } from "@solana/wallet-adapter-react";
 import dynamic from "next/dynamic";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { useSwarmShield } from "@/hooks/useSwarmShield";
 import { HowItWorks } from "@/components/HowItWorks";
 import { SponsorBadges } from "@/components/SponsorBadges";
@@ -231,7 +231,7 @@ export default function SwarmShield() {
       <IntegrationVerifier />
 
       {/* Subtle gradient background */}
-      <div className="fixed inset-0 bg-gradient-to-b from-black via-gray-950 to-black" />
+      <div className="fixed inset-0 bg-gradient-to-b from-black via-gray-950 to-black pointer-events-none" />
 
       {/* Swarm visualization */}
       <div className="fixed inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
@@ -466,6 +466,7 @@ export default function SwarmShield() {
                 showSuccess={showSuccess}
                 showError={showError}
                 lastTxSignature={swarmState.lastTxSignature}
+                lastEncryptedPreview={swarmState.lastEncryptedPreview}
                 onSubmitIntent={async (direction, amount) => {
                   setIsSubmitting(true);
                   try {

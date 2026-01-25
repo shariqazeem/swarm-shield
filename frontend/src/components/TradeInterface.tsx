@@ -26,6 +26,7 @@ interface TradeInterfaceProps {
   showSuccess: boolean;
   showError: string | null;
   lastTxSignature?: string | null;
+  lastEncryptedPreview?: string | null;
   // Actions
   onSubmitIntent: (direction: 'sell' | 'buy', amount: number) => void;
   onDeposit: (type: 'sol' | 'usdc') => void;
@@ -43,6 +44,7 @@ export function TradeInterface({
   showSuccess,
   showError,
   lastTxSignature,
+  lastEncryptedPreview,
   onSubmitIntent,
   onDeposit,
   onWithdraw,
@@ -295,7 +297,7 @@ export function TradeInterface({
               whileHover={isValidAmount ? { scale: 1.02 } : {}}
               whileTap={isValidAmount ? { scale: 0.98 } : {}}
             >
-              Submit Intent
+              Submit Encrypted Intent
             </motion.button>
 
             {/* Error Display */}
@@ -311,7 +313,9 @@ export function TradeInterface({
 
             {/* How it works - Ultra minimal */}
             <div className="mt-12 pt-8 border-t border-white/5">
-              <div className="flex items-center justify-center gap-6 text-[10px] text-white/20 uppercase tracking-widest">
+              <div className="flex items-center justify-center gap-4 text-[10px] text-white/20 uppercase tracking-widest">
+                <span>Encrypt</span>
+                <span className="text-white/10">→</span>
                 <span>Submit</span>
                 <span className="text-white/10">→</span>
                 <span>Batch</span>
@@ -334,7 +338,7 @@ export function TradeInterface({
             className="py-20"
           >
             <h1 className="text-5xl md:text-6xl font-extralight tracking-tight mb-6">
-              Submitting
+              Encrypting
               <motion.span
                 animate={{ opacity: [0.3, 1, 0.3] }}
                 transition={{ duration: 1.5, repeat: Infinity }}
@@ -365,7 +369,7 @@ export function TradeInterface({
             </div>
 
             <p className="text-white/30 text-sm">
-              Your intent is being added to the swarm
+              Encrypting intent & submitting to dark pool
             </p>
           </motion.div>
         )}
@@ -426,7 +430,7 @@ export function TradeInterface({
               transition={{ delay: 0.4 }}
               className="text-5xl md:text-6xl font-extralight tracking-tight mb-4"
             >
-              Intent Submitted
+              Encrypted & Submitted
             </motion.h1>
 
             <motion.p
@@ -435,8 +439,24 @@ export function TradeInterface({
               transition={{ delay: 0.6 }}
               className="text-white/40 font-light mb-6"
             >
-              Added to Dark Liquidity Pool
+              Shielded intent added to Dark Pool
             </motion.p>
+
+            {/* Encrypted data preview */}
+            {lastEncryptedPreview && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.7 }}
+                className="mb-4 px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5 max-w-sm mx-auto"
+              >
+                <p className="text-[10px] text-white/30 uppercase tracking-widest mb-1.5">On-chain Data (Encrypted)</p>
+                <p className="text-[11px] text-white/50 font-mono break-all">
+                  {lastEncryptedPreview}
+                </p>
+                <p className="text-[9px] text-green-400/60 mt-1.5">MEV bots see only random bytes</p>
+              </motion.div>
+            )}
 
             {/* Info */}
             <motion.div
@@ -447,7 +467,7 @@ export function TradeInterface({
             >
               <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
               <span className="text-xs text-white/50">
-                Intent encrypted • Batch execution pending
+                Intent encrypted on-chain • Only keeper can decrypt
               </span>
             </motion.div>
 

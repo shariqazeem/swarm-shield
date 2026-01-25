@@ -128,6 +128,20 @@ export function findBatchPDA(batchId: BN): [PublicKey, number] {
   );
 }
 
+export function findShieldedIntentPDA(
+  authority: PublicKey,
+  nonce: BN
+): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("shielded_intent"),
+      authority.toBuffer(),
+      nonce.toArrayLike(Buffer, "le", 8),
+    ],
+    SWARM_SHIELD_PROGRAM_ID
+  );
+}
+
 // Generate agent ID hash from wallet
 export function generateAgentIdHash(wallet: PublicKey): number[] {
   const hash = sha256.array(wallet.toBuffer());
@@ -528,6 +542,97 @@ export class SwarmShieldClient {
       // Re-throw other errors
       throw err;
     }
+  }
+
+  // Submit ENCRYPTED trade intent - TRUE PRIVACY
+  // Intent data is encrypted with keeper's X25519 public key
+  // On-chain, only encrypted bytes are visible to observers
+  async submitShieldedIntent(
+    authority: PublicKey,
+    intentType: "buy" | "sell",
+    amountLamports: BN,
+    minOutputLamports: BN
+  ): Promise<{ signature: string; encryptedData: Uint8Array }> {
+    if (!this.wallet) throw new Error("Wallet not connected");
+
+    // Import encryption utility
+    const { encryptIntent } = await import("./encryption");
+
+    // Encrypt the intent data
+    const typeNum = intentType === "buy" ? 0 : 1;
+    const encryptedData = encryptIntent(
+      typeNum,
+      BigInt(amountLamports.toString()),
+      BigInt(minOutputLamports.toString())
+    );
+
+    console.log("Intent encrypted! On-chain data will be unreadable to MEV bots.");
+    console.log("Encrypted payload (first 32 bytes = ephemeral key):", Buffer.from(encryptedData.slice(0, 32)).toString("hex"));
+
+    // Get current agent nonce
+    let agent = await this.getAgent(authority);
+    if (!agent) throw new Error("Agent not registered");
+
+    // Check if shielded intent PDA already exists at this nonce
+    let [shieldedIntentPDA] = findShieldedIntentPDA(authority, agent.nonce);
+    let intentExists = await this.connection.getAccountInfo(shieldedIntentPDA);
+
+    if (intentExists) {
+      console.log("Shielded intent PDA exists, refetching agent...");
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      agent = await this.getAgent(authority);
+      if (!agent) throw new Error("Agent not registered");
+      [shieldedIntentPDA] = findShieldedIntentPDA(authority, agent.nonce);
+    }
+
+    const [agentPDA] = findAgentPDA(authority);
+
+    // Build instruction: discriminator + encrypted_data([u8; 96])
+    const discriminator = getDiscriminator("submit_shielded_intent");
+    const data = Buffer.concat([
+      discriminator,
+      Buffer.from(encryptedData), // 96 bytes
+    ]);
+
+    const instruction = new TransactionInstruction({
+      keys: [
+        { pubkey: agentPDA, isSigner: false, isWritable: true },
+        { pubkey: shieldedIntentPDA, isSigner: false, isWritable: true },
+        { pubkey: authority, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      programId: SWARM_SHIELD_PROGRAM_ID,
+      data,
+    });
+
+    // Add privacy-preserving memo (doesn't reveal intent details)
+    const memo = createMemoInstruction(
+      "SwarmShield: Encrypted Intent Submitted to Dark Pool"
+    );
+
+    const tx = new Transaction().add(memo).add(instruction);
+    tx.feePayer = authority;
+    const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+
+    const signedTx = await this.wallet.signTransaction(tx);
+    const signature = await this.connection.sendRawTransaction(signedTx.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: "confirmed",
+    });
+
+    const confirmation = await this.connection.confirmTransaction({
+      signature,
+      blockhash,
+      lastValidBlockHeight,
+    });
+
+    if (confirmation.value.err) {
+      throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+    }
+
+    console.log("Encrypted intent confirmed on-chain! Signature:", signature);
+    return { signature, encryptedData };
   }
 
   // Withdraw SOL from vault

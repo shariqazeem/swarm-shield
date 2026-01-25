@@ -2,14 +2,8 @@
 
 import { motion } from "framer-motion";
 import { Shield, Terminal, Github, ExternalLink, Wallet } from "lucide-react";
-import { useWallet } from "@solana/wallet-adapter-react";
-import dynamic from "next/dynamic";
-
-// Dynamic import to prevent hydration mismatch
-const WalletMultiButtonDynamic = dynamic(
-  async () => (await import("@solana/wallet-adapter-react-ui")).WalletMultiButton,
-  { ssr: false }
-);
+import { useWallet } from "@/contexts/PhantomWallet";
+import { PhantomConnectButton } from "@/components/PhantomConnectButton";
 
 interface HeaderProps {
   walletBalance?: number;
@@ -88,9 +82,7 @@ export default function Header({ walletBalance }: HeaderProps) {
             </motion.a>
 
             {/* Wallet Connect Button */}
-            <div className="wallet-adapter-button-wrapper">
-              <WalletMultiButtonDynamic />
-            </div>
+            <PhantomConnectButton />
           </div>
         </div>
       </div>

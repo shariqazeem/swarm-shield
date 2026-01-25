@@ -18,6 +18,7 @@ export const SWARM_SHIELD_PROGRAM_ID = new PublicKey(
 const CONFIG_SEED = "config";
 const INTENT_SEED = "intent";
 const BATCH_SEED = "batch";
+const SHIELDED_INTENT_SEED = "shielded_intent";
 
 // Helper to find PDAs
 export function findConfigPDA(): [PublicKey, number] {
@@ -48,6 +49,20 @@ export function findBatchPDA(batchId: BN): [PublicKey, number] {
   );
 }
 
+export function findShieldedIntentPDA(
+  authority: PublicKey,
+  nonce: BN
+): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [
+      Buffer.from(SHIELDED_INTENT_SEED),
+      authority.toBuffer(),
+      nonce.toArrayLike(Buffer, "le", 8),
+    ],
+    SWARM_SHIELD_PROGRAM_ID
+  );
+}
+
 // Instruction discriminators
 function getDiscriminator(name: string): Buffer {
   const hash = createHash("sha256")
@@ -74,6 +89,15 @@ export interface TradeIntent {
   minOutput: BN;
   expirySlot: BN;
   isPending: boolean;
+  bump: number;
+}
+
+export interface ShieldedIntentAccount {
+  agent: PublicKey;
+  encryptedData: Uint8Array; // 96 bytes
+  expirySlot: BN;
+  isPending: boolean;
+  nonce: BN;
   bump: number;
 }
 
@@ -299,6 +323,161 @@ export class SwarmShieldKeeperClient {
     } catch (e) {
       console.error("Error getting pending intents:", e);
       return [];
+    }
+  }
+
+  // Get all pending SHIELDED intents (encrypted on-chain)
+  async getAllPendingShieldedIntents(): Promise<
+    Array<{ pubkey: PublicKey; intent: ShieldedIntentAccount }>
+  > {
+    try {
+      // ShieldedIntent account size: 8 discriminator + 32 + 96 + 8 + 1 + 8 + 1 = 154 bytes
+      const accounts = await this.connection.getProgramAccounts(
+        SWARM_SHIELD_PROGRAM_ID,
+        {
+          filters: [
+            {
+              dataSize: 154,
+            },
+          ],
+        }
+      );
+
+      const intents: Array<{ pubkey: PublicKey; intent: ShieldedIntentAccount }> = [];
+
+      for (const { pubkey, account } of accounts) {
+        try {
+          const data = account.data.slice(8); // skip discriminator
+          const intent: ShieldedIntentAccount = {
+            agent: new PublicKey(data.slice(0, 32)),
+            encryptedData: new Uint8Array(data.slice(32, 128)), // 96 bytes
+            expirySlot: new BN(data.slice(128, 136), "le"),
+            isPending: data[136] === 1,
+            nonce: new BN(data.slice(137, 145), "le"),
+            bump: data[145],
+          };
+
+          if (intent.isPending) {
+            intents.push({ pubkey, intent });
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+
+      return intents;
+    } catch (e) {
+      console.error("Error getting pending shielded intents:", e);
+      return [];
+    }
+  }
+
+  // Execute shielded batch - keeper provides decrypted values for settlement
+  async executeShieldedBatch(
+    batchId: BN,
+    totalOutput: BN,
+    decryptedTypes: number[],
+    decryptedAmounts: BN[],
+    decryptedMinOutputs: BN[],
+    shieldedIntentAccounts: Array<{ intentPubkey: PublicKey; agentPubkey: PublicKey }>
+  ): Promise<string> {
+    const [configPDA] = findConfigPDA();
+    const [batchPDA] = findBatchPDA(batchId);
+
+    const discriminator = getDiscriminator("execute_shielded_batch");
+
+    // Serialize instruction data:
+    // discriminator(8) + batch_id(8) + total_output(8)
+    // + vec_len(4) + types + vec_len(4) + amounts + vec_len(4) + min_outputs
+    const intentCount = decryptedTypes.length;
+
+    // Build data buffer
+    const parts: Buffer[] = [
+      discriminator,
+      batchId.toArrayLike(Buffer, "le", 8),
+      totalOutput.toArrayLike(Buffer, "le", 8),
+    ];
+
+    // Vec<u8> decrypted_types
+    const typesLen = Buffer.alloc(4);
+    typesLen.writeUInt32LE(intentCount, 0);
+    parts.push(typesLen);
+    parts.push(Buffer.from(decryptedTypes));
+
+    // Vec<u64> decrypted_amounts
+    const amountsLen = Buffer.alloc(4);
+    amountsLen.writeUInt32LE(intentCount, 0);
+    parts.push(amountsLen);
+    for (const amount of decryptedAmounts) {
+      parts.push(amount.toArrayLike(Buffer, "le", 8));
+    }
+
+    // Vec<u64> decrypted_min_outputs
+    const minOutputsLen = Buffer.alloc(4);
+    minOutputsLen.writeUInt32LE(intentCount, 0);
+    parts.push(minOutputsLen);
+    for (const minOutput of decryptedMinOutputs) {
+      parts.push(minOutput.toArrayLike(Buffer, "le", 8));
+    }
+
+    const data = Buffer.concat(parts);
+
+    // Build account metas
+    const accountMetas = [
+      { pubkey: configPDA, isSigner: false, isWritable: true },
+      { pubkey: batchPDA, isSigner: false, isWritable: true },
+      { pubkey: this.keeper.publicKey, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ];
+
+    // Add shielded intent and agent accounts as remaining accounts
+    for (const { intentPubkey, agentPubkey } of shieldedIntentAccounts) {
+      accountMetas.push({ pubkey: intentPubkey, isSigner: false, isWritable: true });
+      accountMetas.push({ pubkey: agentPubkey, isSigner: false, isWritable: true });
+    }
+
+    const instruction = new TransactionInstruction({
+      keys: accountMetas,
+      programId: SWARM_SHIELD_PROGRAM_ID,
+      data,
+    });
+
+    const tx = new Transaction().add(instruction);
+    tx.feePayer = this.keeper.publicKey;
+    const { blockhash, lastValidBlockHeight } =
+      await this.connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+
+    tx.sign(this.keeper);
+
+    try {
+      const signature = await this.connection.sendRawTransaction(
+        tx.serialize(),
+        {
+          skipPreflight: false,
+          preflightCommitment: "confirmed",
+        }
+      );
+
+      const confirmation = await this.connection.confirmTransaction({
+        signature,
+        blockhash,
+        lastValidBlockHeight,
+      });
+
+      if (confirmation.value.err) {
+        throw new Error(
+          `Shielded batch execution failed: ${JSON.stringify(confirmation.value.err)}`
+        );
+      }
+
+      return signature;
+    } catch (error: any) {
+      if (error.logs) {
+        console.error("\n📋 Transaction Logs:");
+        error.logs.forEach((log: string) => console.error(`   ${log}`));
+      }
+      throw error;
     }
   }
 }

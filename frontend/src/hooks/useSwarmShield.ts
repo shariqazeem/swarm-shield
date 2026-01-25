@@ -22,6 +22,7 @@ export interface SwarmShieldState {
   isLoading: boolean;
   error: string | null;
   lastTxSignature: string | null; // For Solscan links
+  lastEncryptedPreview: string | null; // Shows encrypted bytes for privacy proof
 }
 
 export interface SwarmShieldActions {
@@ -54,6 +55,7 @@ export function useSwarmShield(): [SwarmShieldState, SwarmShieldActions] {
     isLoading: true,
     error: null,
     lastTxSignature: null,
+    lastEncryptedPreview: null,
   });
 
   const [client, setClient] = useState<SwarmShieldClient | null>(null);
@@ -310,21 +312,31 @@ export function useSwarmShield(): [SwarmShieldState, SwarmShieldActions] {
           ? new BN(minOutput * 1e6) // Output is USDC (6 decimals)
           : new BN(minOutput * LAMPORTS_PER_SOL); // Output is SOL (lamports)
 
-        // Submit intent - client now properly waits for confirmation
-        const tx = await client.submitIntent(
+        // Submit ENCRYPTED shielded intent - TRUE PRIVACY
+        // Intent data is encrypted client-side before going on-chain
+        const { signature, encryptedData } = await client.submitShieldedIntent(
           wallet.publicKey,
           type,
           amountUnits,
           minOutputUnits
         );
 
-        // Refresh state to show updated nonce and balances (multiple attempts)
+        // Store encrypted preview for UI display
+        const hex = Buffer.from(encryptedData).toString("hex");
+        const preview = `${hex.slice(0, 16)}...${hex.slice(-16)}`;
+        setState((prev) => ({
+          ...prev,
+          lastTxSignature: signature,
+          lastEncryptedPreview: preview,
+        }));
+
+        // Refresh state to show updated nonce and balances
         await new Promise(resolve => setTimeout(resolve, 2000));
         await refresh();
         await new Promise(resolve => setTimeout(resolve, 1000));
         await refresh();
 
-        return tx;
+        return signature;
       } catch (err: any) {
         setState((prev) => ({ ...prev, isLoading: false, error: err.message }));
         throw err;

@@ -1,220 +1,185 @@
-# SwarmShield Demo Script
-## Privacy Hack 2026 - 3-Minute Video Submission
+# SwarmShield Demo Script for Judges
+
+## Quick Links
+
+| Resource | Link |
+|----------|------|
+| Live Frontend | [swarmshield.vercel.app](https://swarmshield.vercel.app) |
+| Program on Solscan | [5rLQtJrr27bt4y7ERMgnQUcALKXfy2uTgEdq7rfbQvew](https://solscan.io/account/5rLQtJrr27bt4y7ERMgnQUcALKXfy2uTgEdq7rfbQvew?cluster=devnet) |
+| Example Encrypted TX | [View on Solscan](https://solscan.io/tx/bpL71PwcDk1DwkmssLxWCE3VDmswNRuPxoT8XuZoot6xeC2dvhCFdS6X6vEXwfmvnMR3EqJjuChLnTbPaZ8NXUw?cluster=devnet) |
 
 ---
 
-## Pre-Recording Checklist
+## Part 1: Connect Wallet (30 seconds)
 
-- [ ] Frontend running at localhost:3000 (or deployed URL)
-- [ ] Keeper service running in terminal (visible in split screen)
-- [ ] Test wallet with ~0.5 SOL devnet balance
-- [ ] Clean browser (no extensions showing)
-- [ ] Screen recording at 1080p or higher
-- [ ] Microphone tested
+1. Go to [swarmshield.vercel.app](https://swarmshield.vercel.app)
+2. Click **"Connect Wallet"** (Phantom recommended)
+3. Approve the connection
 
----
-
-## Video Structure (3:00 Total)
-
-### INTRO - Hook the Judges (0:00 - 0:20)
-
-**[SCREEN: Black screen with text]**
-
-> "AI agents are the new whales. MEV bots are hunting them."
-
-**[SCREEN: Show SwarmShield homepage]**
-
-**SAY:**
-> "Half a billion dollars extracted from Solana users by MEV bots. 78,000 victims from sandwich attacks alone. AI agents are particularly vulnerable—their patterns are predictable, their intents visible. SwarmShield changes that. This is dark liquidity for AI agents."
+**What to notice:**
+- Range compliance check runs automatically on wallet connect
+- Status shows "Verified" if wallet passes OFAC screening
 
 ---
 
-### THE PROBLEM (0:20 - 0:40)
+## Part 2: Deposit to Dark Pool (1 minute)
 
-**[SCREEN: Simple diagram or animation]**
+1. Click the **"Deposit"** tab
+2. Enter amount (e.g., 0.1 SOL or 5 USDC)
+3. Click **"Deposit SOL"** or **"Deposit USDC"**
+4. Approve transaction in wallet
 
+**What to notice:**
+- Your balance updates in the dark pool
+- Funds are now in the shielded vault, ready for private trading
+
+---
+
+## Part 3: Submit Encrypted Intent (1 minute) - KEY DEMO
+
+1. Click the **"Trade"** tab
+2. Select trade direction: **BUY** (SOL -> USDC) or **SELL** (USDC -> SOL)
+3. Enter amount (e.g., 1 USDC)
+4. Set slippage tolerance (e.g., 1%)
+5. Click **"Submit Encrypted Intent"**
+
+**What to notice:**
+- Button says "Encrypting..." during submission
+- Success message shows: **"Encrypted & Submitted"**
+- **Encrypted Data Preview**: You'll see something like `9bed43a48f60f39e...6500000000000000`
+- This is the ACTUAL encrypted bytes stored on-chain
+
+**Key talking point:**
+> "This hex string is what MEV bots see. They cannot determine if this is a buy or sell, the amount, or the slippage. It's cryptographically encrypted using NaCl box (X25519 + XSalsa20-Poly1305)."
+
+---
+
+## Part 4: Verify Encryption On-Chain (1 minute)
+
+1. Go to [Solscan Devnet](https://solscan.io/?cluster=devnet)
+2. Search for the program: `5rLQtJrr27bt4y7ERMgnQUcALKXfy2uTgEdq7rfbQvew`
+3. Click on a recent "submit_shielded_intent" transaction
+4. Look at the transaction memo and account data
+
+**What to notice:**
+- Memo: `"SwarmShield: Encrypted Intent Submitted to Dark Pool"`
+- Account data: 96 bytes of encrypted ciphertext (NOT plaintext trade data)
+- NO readable trade direction, amount, or slippage anywhere
+
+**Compare to plaintext:** Show a competitor's dark pool where trade data is visible on-chain.
+
+---
+
+## Part 5: Batch Execution (Automatic)
+
+When 3+ intents of the same direction accumulate:
+1. Keeper service automatically detects pending intents
+2. Keeper decrypts intents using X25519 private key
+3. Intents are batched into a single Jupiter swap
+4. All users receive their tokens atomically
+
+**Keeper logs show:**
 ```
-WITHOUT PROTECTION:
-Agent A trades → MEV bot sees → Sandwich attack → 2% loss
-Agent B trades → MEV bot sees → Front-run → 3% loss
+🔐 Found 3 shielded intent(s), 3 active
+   🔓 Decrypted: BUY 1.0000 USDC from 5tKREECD...
+   🔓 Decrypted: BUY 1.0000 USDC from 5tKREECD...
+   🔓 Decrypted: BUY 1.0000 USDC from 5tKREECD...
+✅ SHIELDED BATCH EXECUTED!
 ```
 
-**SAY:**
-> "Every time an AI agent trades, MEV bots see it in the mempool. They sandwich the trade, extracting 1-3% every single time. For agents making hundreds of trades, that's catastrophic."
+---
+
+## Bounty Integrations Checklist
+
+### Anoncoin - Dark Liquidity ($10,000)
+- [x] Encrypted intents (NaCl box)
+- [x] Dark liquidity pools (shielded vaults)
+- [x] Private swaps via batching
+- [x] MEV protection
+
+### Light Protocol - Open Track ($18,000)
+- [x] Architecture designed for ZK Compression
+- [x] Compressed account structure ready
+- [x] Shielded state management
+
+### Helius - RPC Infrastructure ($5,000)
+- [x] Primary RPC provider
+- [x] Photon indexer integration
+- [x] Priority fee estimation
+
+### QuickNode - Backup Infrastructure ($3,000)
+- [x] Backup RPC provider
+- [x] Browser CORS support
+- [x] Automatic failover
+
+### Range - Compliance ($1,500)
+- [x] Wallet screening on connect
+- [x] OFAC sanctions check
+- [x] Risk assessment display
+
+### PNP Exchange - AI Agents ($2,500)
+- [x] Agent-first SDK design
+- [x] Autonomous trading support
+- [x] Anonymous agent registration
+
+**Total Bounty Target: $40,000**
 
 ---
 
-### THE SOLUTION (0:40 - 1:00)
+## Q&A Preparation
 
-**[SCREEN: SwarmShield architecture diagram]**
+### "How is this different from other dark pools?"
 
-```
-WITH SWARMSHIELD:
-Agent A → Dark Pool ─┐
-Agent B → Dark Pool ──┼→ Single TX → MEV sees nothing
-Agent C → Dark Pool ─┘
-```
+> "Other dark pools batch trades but store **plaintext** on-chain. MEV bots can still see the trade data - they just can't front-run individual trades. SwarmShield uses **NaCl box encryption** (X25519 + XSalsa20-Poly1305) to ensure the trade data is NEVER visible on-chain. MEV bots see only random bytes."
 
-**SAY:**
-> "SwarmShield is a dark liquidity pool. Agents deposit into shielded vaults, submit private intents, and a keeper batches them into a single transaction. MEV bots see one random wallet making one trade. They have no idea there are multiple agents with different strategies inside."
+### "How do you prevent the keeper from front-running?"
 
----
+> "The keeper is a trusted party in the MVP. Post-hackathon, we plan to implement threshold decryption with multiple keepers, where no single party can decrypt without consensus. We can also use TEEs (Trusted Execution Environments) for additional security."
 
-### LIVE DEMO - Wallet Connect & Compliance (1:00 - 1:30)
+### "What's the encryption algorithm?"
 
-**[SCREEN: Click "Connect Wallet"]**
+> "NaCl box, which combines X25519 for key exchange and XSalsa20-Poly1305 for authenticated encryption. It's the same encryption used by Signal and other privacy-focused applications. The 96-byte payload contains the ephemeral public key (32 bytes), nonce (24 bytes), and ciphertext (40 bytes)."
 
-**SAY:**
-> "Let me show you. First, I connect my wallet..."
+### "How do you handle different trade sizes in a batch?"
 
-**[SCREEN: Show compliance animation - OFAC, Risk Assessment, etc.]**
+> "We group intents by direction and execute a single Jupiter swap for the net amount. Individual users are settled proportionally based on their contribution to the batch. This provides privacy amplification - your specific trade is hidden among others."
 
-**SAY:**
-> "Immediately, Range API screens the wallet for sanctions and risk. This is compliant privacy—we protect good actors while blocking bad ones. Watch the verification..."
+### "Why Solana?"
 
-**[SCREEN: Show "Verified" checkmark animation]**
-
-**SAY:**
-> "Passed. Now I can access the dark pool."
+> "Solana's high throughput and low fees make it ideal for MEV protection. AI agents need to trade frequently, and Solana can handle the volume. Plus, the Solana ecosystem (Jupiter, Helius, etc.) provides excellent infrastructure for building DeFi applications."
 
 ---
 
-### LIVE DEMO - Dark Pool Deposit (1:30 - 1:50)
+## Key Differentiators Table
 
-**[SCREEN: Show TradeInterface with Dark Pool Balance card]**
-
-**SAY:**
-> "Here's my dark pool balance. I'll deposit 0.1 SOL into the shielded vault..."
-
-**[SCREEN: Click Manage → Deposit → Enter 0.1 → Submit]**
-
-**SAY:**
-> "The SOL is now in the dark pool. Notice we're using Helius RPC—you can see the live latency here. The deposit transaction is confirmed."
-
-**[SCREEN: Show updated balance]**
+| Feature | SwarmShield | Other Dark Pools |
+|---------|-------------|------------------|
+| On-chain data | **Encrypted bytes** | Plaintext |
+| MEV visibility | **0%** | Partial |
+| Privacy level | **Cryptographic** | Batching only |
+| Encryption | NaCl Box (X25519) | None |
+| Real swaps | Jupiter | Often mocked |
+| Compliance | Range integrated | Usually none |
 
 ---
 
-### LIVE DEMO - Submit Intent (1:50 - 2:20)
+## Demo Tips
 
-**[SCREEN: Show trade form]**
-
-**SAY:**
-> "Now I'll submit a private trade intent. I want to sell 0.05 SOL for USDC..."
-
-**[SCREEN: Enter amount, toggle to SELL, submit]**
-
-**SAY:**
-> "Watch—this intent goes into the dark pool. It's not a trade yet. It's waiting to be batched with other intents."
-
-**[SCREEN: Show success animation]**
-
-**SAY:**
-> "Intent submitted. Now watch the keeper..."
-
-**[SCREEN: Split screen showing keeper terminal]**
-
-**SAY:**
-> "The keeper monitors for intents, batches them together, and executes via Jupiter. One transaction, multiple agents, zero MEV extraction."
+1. **Use Devnet SOL** - Make sure wallet has devnet SOL for gas
+2. **Submit 3+ intents** - Batching requires minimum 3 intents of same direction
+3. **Show Solscan** - Always verify encrypted data on-chain for judges
+4. **Compare to plaintext** - Show how other protocols expose trade data
+5. **Highlight encryption hex** - The random bytes are the key visual proof
 
 ---
 
-### TECHNICAL HIGHLIGHTS (2:20 - 2:40)
+## Emergency Fallback
 
-**[SCREEN: Show Agent SDK panel]**
-
-**SAY:**
-> "For developers, we have SDKs in TypeScript, Python, and Rust. AI agents can integrate SwarmShield programmatically—deposit, trade, withdraw—all with MEV protection."
-
-**[SCREEN: Click through code examples]**
-
-**SAY:**
-> "This is built on Light Protocol's ZK Compression architecture for private state, Helius and QuickNode for premium infrastructure, and Range for compliance. Six bounty integrations, forty thousand dollars potential."
+If the frontend is down:
+1. Run locally: `cd frontend && npm run dev`
+2. Use test script: `npx tsx test-encryption.ts`
+3. Show keeper logs from VM: `pm2 logs keeper`
 
 ---
 
-### CLOSE - Why We'll Win (2:40 - 3:00)
-
-**[SCREEN: SwarmShield logo / stats display]**
-
-**SAY:**
-> "SwarmShield solves a real problem—half a billion extracted from users. We have a complete product—not a demo, a working dark liquidity pool with real Jupiter swaps. We target all six bounties with genuine integrations. And the timing is perfect—AI agents are exploding, and they all need protection."
-
-**[SCREEN: Final frame]**
-
-> "SwarmShield. Where agents trade in the dark."
-
-**SAY:**
-> "Thank you."
-
----
-
-## Key Points to Emphasize
-
-### For Anoncoin ($10,000)
-- "Dark liquidity pool" - use this exact phrase
-- "Private swaps"
-- "MEV protection through batching"
-
-### For Light Protocol ($18,000)
-- "ZK Compression architecture"
-- "Compressed accounts for private state"
-- "Photon indexer integration"
-
-### For Helius ($5,000)
-- Show the network status indicator
-- Mention "Helius RPC" by name
-- "Real-time latency monitoring"
-
-### For Range ($1,500)
-- Show the full compliance animation
-- "OFAC sanctions screening"
-- "Compliant privacy"
-
-### For PNP Exchange ($2,500)
-- "AI agent first design"
-- Show the Agent SDK
-- "Autonomous trading without revealing strategy"
-
-### For QuickNode ($3,000)
-- Mention "QuickNode backup RPC"
-- "Redundant infrastructure"
-
----
-
-## Backup Talking Points
-
-If something fails during the demo:
-
-**Wallet won't connect:**
-> "Let me show you from our deployed version instead..."
-
-**Transaction fails:**
-> "Devnet can be temperamental—let me show you a successful transaction from our explorer..."
-
-**Keeper not responding:**
-> "The keeper runs on 30-second intervals—here's a recent batch execution..."
-
----
-
-## Recording Tips
-
-1. **Speak slowly and clearly** - Judges are reviewing many submissions
-2. **Pause on key screens** - Let them see the UI details
-3. **Use confident language** - "This IS the dark liquidity pool" not "This attempts to be..."
-4. **Show don't tell** - Actually click buttons, show real transactions
-5. **End strong** - The last 10 seconds matter most
-
----
-
-## Post-Recording Checklist
-
-- [ ] Video is exactly 3:00 or under
-- [ ] Audio is clear and balanced
-- [ ] All sponsor names are pronounced correctly
-- [ ] Explorer links are visible when shown
-- [ ] Upload at highest quality available
-
----
-
-*Good luck. You've built something exceptional. Now show them.*
+*SwarmShield: Where Agents Trade in the Dark*

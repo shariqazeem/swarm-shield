@@ -2,6 +2,7 @@ import { Connection, Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import BN from "bn.js";
 import { SwarmShieldKeeperClient, findConfigPDA } from "./swarmshield-client";
 import { JupiterClient, SOL_MINT, USDC_MINT } from "./jupiter-client";
+import { decryptIntent, getKeeperX25519SecretKey } from "./encryption";
 import * as dotenv from "dotenv";
 
 dotenv.config();
@@ -21,16 +22,21 @@ class DarkPoolKeeper {
   private connection: Connection;
   private isRunning: boolean = false;
   private isDevnet: boolean;
+  private keeperX25519SecretKey: Uint8Array;
 
   constructor(connection: Connection, keeper: Keypair, isDevnet: boolean = true) {
     this.connection = connection;
     this.isDevnet = isDevnet;
     this.client = new SwarmShieldKeeperClient(connection, keeper);
 
+    // Derive X25519 secret key for decrypting shielded intents
+    this.keeperX25519SecretKey = getKeeperX25519SecretKey(keeper.secretKey);
+
     // Use real Jupiter client (simulates on devnet, executes on mainnet)
     this.jupiterClient = new JupiterClient(connection, isDevnet);
 
     console.log(`🔧 Jupiter Mode: ${isDevnet ? 'DEVNET (simulation with real quotes)' : 'MAINNET (real execution)'}`);
+    console.log(`🔐 Shielded intent decryption: ENABLED`);
   }
 
   // Calculate MEV savings from batching
@@ -285,6 +291,135 @@ class DarkPoolKeeper {
     }
   }
 
+  // Process pending SHIELDED intents (encrypted on-chain)
+  private async processShieldedBatch(): Promise<void> {
+    try {
+      const config = await this.client.getConfig();
+      if (!config) return;
+
+      // Get all pending shielded intents
+      const pendingShielded = await this.client.getAllPendingShieldedIntents();
+
+      if (pendingShielded.length === 0) {
+        return; // Silent - don't spam logs when no shielded intents
+      }
+
+      // Filter expired
+      const currentSlot = await this.connection.getSlot();
+      const activeShielded = pendingShielded.filter(({ intent }) => {
+        return currentSlot <= intent.expirySlot.toNumber() && intent.isPending;
+      });
+
+      console.log(`\n🔐 Found ${pendingShielded.length} shielded intent(s), ${activeShielded.length} active`);
+
+      if (activeShielded.length < config.minBatchSize) {
+        console.log(`   ⏳ Need ${config.minBatchSize} shielded intents for batch (have ${activeShielded.length})`);
+        return;
+      }
+
+      // Decrypt all intents
+      const decryptedIntents: Array<{
+        pubkey: any;
+        agentPubkey: any;
+        intentType: number;
+        amount: BN;
+        minOutput: BN;
+      }> = [];
+
+      for (const { pubkey, intent } of activeShielded) {
+        const decrypted = decryptIntent(intent.encryptedData, this.keeperX25519SecretKey);
+        if (!decrypted) {
+          console.error(`   ❌ Failed to decrypt intent ${pubkey.toBase58().slice(0, 8)}...`);
+          continue;
+        }
+
+        decryptedIntents.push({
+          pubkey,
+          agentPubkey: intent.agent,
+          intentType: decrypted.intentType,
+          amount: new BN(decrypted.amount.toString()),
+          minOutput: new BN(decrypted.minOutput.toString()),
+        });
+
+        const type = decrypted.intentType === 0 ? "BUY" : "SELL";
+        const amountNum = decrypted.intentType === 0
+          ? Number(decrypted.amount) / 1e6
+          : Number(decrypted.amount) / LAMPORTS_PER_SOL;
+        const unit = decrypted.intentType === 0 ? "USDC" : "SOL";
+        console.log(`   🔓 Decrypted: ${type} ${amountNum.toFixed(4)} ${unit} from ${intent.agent.toBase58().slice(0, 8)}...`);
+      }
+
+      if (decryptedIntents.length < config.minBatchSize) {
+        console.log(`   ⏳ Not enough valid decrypted intents (${decryptedIntents.length}/${config.minBatchSize})`);
+        return;
+      }
+
+      // Take up to maxBatchSize
+      const batchIntents = decryptedIntents.slice(0, config.maxBatchSize);
+
+      console.log(`\n🔄 Processing SHIELDED batch of ${batchIntents.length} intents:`);
+
+      // Calculate volumes
+      let totalBuyVolume = new BN(0);
+      let totalSellVolume = new BN(0);
+
+      for (const intent of batchIntents) {
+        if (intent.intentType === 0) {
+          totalBuyVolume = totalBuyVolume.add(intent.amount);
+        } else {
+          totalSellVolume = totalSellVolume.add(intent.amount);
+        }
+      }
+
+      // Execute swap via Jupiter
+      const keeperPubkey = this.client.getKeeperPublicKey();
+      const { totalInput, totalOutput } = await this.executeSwapWithJupiter(
+        totalBuyVolume,
+        totalSellVolume,
+        keeperPubkey
+      );
+
+      // Find next batch ID
+      const startingBatchId = config.totalBatches;
+      const batchId = await this.client.findNextAvailableBatchId(startingBatchId);
+      console.log(`\n⚡ Executing SHIELDED batch #${batchId.toString()} on-chain...`);
+
+      // Prepare decrypted data arrays for the instruction
+      const decryptedTypes = batchIntents.map(i => i.intentType);
+      const decryptedAmounts = batchIntents.map(i => i.amount);
+      const decryptedMinOutputs = batchIntents.map(i => i.minOutput);
+      const intentAccounts = batchIntents.map(i => ({
+        intentPubkey: i.pubkey,
+        agentPubkey: i.agentPubkey,
+      }));
+
+      const signature = await this.client.executeShieldedBatch(
+        batchId,
+        totalOutput,
+        decryptedTypes,
+        decryptedAmounts,
+        decryptedMinOutputs,
+        intentAccounts
+      );
+
+      const mevSaved = this.calculateMEVSavings(totalInput);
+
+      console.log(`\n✅ SHIELDED BATCH EXECUTED!`);
+      console.log(`   🔗 Signature: ${signature}`);
+      console.log(`   📦 Batch ID: ${batchId.toString()}`);
+      console.log(`   🔐 Intents Decrypted & Settled: ${batchIntents.length}`);
+      console.log(`   🛡️  MEV Saved: ${mevSaved.toNumber() / LAMPORTS_PER_SOL} SOL`);
+      console.log(`   🔒 On-chain: Only encrypted bytes visible to observers`);
+      console.log(`\n${"=".repeat(60)}\n`);
+
+    } catch (error: any) {
+      console.error("❌ Error processing shielded batch:", error.message);
+      if (error.logs) {
+        console.error("Transaction logs:", error.logs);
+      }
+    }
+  }
+
   // Main keeper loop
   async start(): Promise<void> {
     console.log("\n" + "=".repeat(60));
@@ -316,6 +451,7 @@ class DarkPoolKeeper {
 
     while (this.isRunning) {
       await this.processBatch();
+      await this.processShieldedBatch();
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
     }
   }

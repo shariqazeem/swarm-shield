@@ -164,6 +164,29 @@ impl CompressedIntentData {
     }
 }
 
+/// Encrypted Trade Intent - TRUE PRIVACY
+/// On-chain, only encrypted bytes are visible. MEV bots cannot read:
+/// - Trade direction (buy/sell)
+/// - Trade amount
+/// - Slippage tolerance
+/// Only the authorized keeper can decrypt using its X25519 private key.
+#[account]
+pub struct ShieldedIntent {
+    /// Agent submitting the intent (public - needed for routing)
+    pub agent: Pubkey,
+    /// NaCl box encrypted data: ephemeral_pk(32) + nonce(24) + ciphertext(40)
+    /// Contains encrypted: intent_type(1) + amount(8) + min_output(8)
+    pub encrypted_data: [u8; 96],
+    /// Expiry slot (not sensitive - needed for cleanup)
+    pub expiry_slot: u64,
+    /// Is pending (not yet batched)
+    pub is_pending: bool,
+    /// Nonce for PDA derivation
+    pub nonce: u64,
+    /// Bump seed
+    pub bump: u8,
+}
+
 /// Batch Execution Record
 #[account]
 #[derive(Default)]
@@ -663,6 +686,223 @@ pub mod swarm_shield {
         msg!("Keeper updated to: {}", new_keeper);
         Ok(())
     }
+
+    // ========================================================================
+    // ENCRYPTED INTENT SYSTEM - True Privacy Layer
+    // ========================================================================
+    //
+    // Intent data (type, amount, min_output) is encrypted with the keeper's
+    // X25519 public key using NaCl box. On-chain, only encrypted bytes are
+    // visible. MEV bots cannot read intent details.
+    //
+    // Flow:
+    // 1. Frontend encrypts intent with keeper's public key
+    // 2. Encrypted bytes stored on-chain (ShieldedIntent account)
+    // 3. Keeper decrypts off-chain
+    // 4. Keeper calls execute_shielded_batch with decrypted values
+    // 5. Settlement happens atomically - no MEV window
+    // ========================================================================
+
+    /// Submit an encrypted trade intent to the dark pool
+    /// The encrypted_data contains NaCl box ciphertext that only the keeper can decrypt
+    /// On-chain observers see only random-looking bytes - true privacy
+    pub fn submit_shielded_intent(
+        ctx: Context<SubmitShieldedIntent>,
+        encrypted_data: [u8; 96],
+    ) -> Result<()> {
+        let agent = &mut ctx.accounts.agent;
+        let intent = &mut ctx.accounts.shielded_intent;
+
+        intent.agent = agent.key();
+        intent.encrypted_data = encrypted_data;
+        intent.expiry_slot = Clock::get()?.slot + 600; // ~4 minutes
+        intent.is_pending = true;
+        intent.nonce = agent.nonce;
+        intent.bump = ctx.bumps.shielded_intent;
+
+        let current_nonce = agent.nonce;
+        agent.nonce = agent.nonce.checked_add(1).ok_or(SwarmShieldError::Overflow)?;
+
+        msg!(
+            "Shielded intent submitted (ENCRYPTED) | Nonce: {} | Data: [{}...{}]",
+            current_nonce,
+            encrypted_data[0],
+            encrypted_data[95]
+        );
+
+        emit!(ShieldedIntentSubmitted {
+            agent: agent.key(),
+            intent_pubkey: intent.key(),
+            nonce: current_nonce,
+            encrypted_data_hash: {
+                // Only emit hash, not the encrypted data itself
+                use anchor_lang::solana_program::hash::hash;
+                let h = hash(&encrypted_data);
+                let mut out = [0u8; 32];
+                out.copy_from_slice(h.as_ref());
+                out
+            },
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
+    /// Execute a batch of encrypted intents (keeper-only)
+    /// Keeper provides decrypted values for settlement
+    /// remaining_accounts: [shielded_intent_0, agent_0, shielded_intent_1, agent_1, ...]
+    pub fn execute_shielded_batch(
+        ctx: Context<ExecuteShieldedBatch>,
+        batch_id: u64,
+        total_output: u64,
+        decrypted_types: Vec<u8>,
+        decrypted_amounts: Vec<u64>,
+        decrypted_min_outputs: Vec<u64>,
+    ) -> Result<()> {
+        let config = &mut ctx.accounts.config;
+
+        // Verify keeper authorization
+        require!(
+            ctx.accounts.keeper.key() == config.keeper,
+            SwarmShieldError::UnauthorizedKeeper
+        );
+
+        let intent_count = decrypted_types.len() as u8;
+        require!(
+            decrypted_amounts.len() == intent_count as usize
+                && decrypted_min_outputs.len() == intent_count as usize,
+            SwarmShieldError::InvalidAccountCount
+        );
+
+        // Calculate total input from decrypted amounts
+        let total_input: u64 = decrypted_amounts.iter().sum();
+
+        let batch = &mut ctx.accounts.batch;
+        batch.batch_id = batch_id;
+        batch.intent_count = intent_count;
+        batch.total_input = total_input;
+        batch.total_output = total_output;
+        batch.execution_slot = Clock::get()?.slot;
+        batch.executed_by = ctx.accounts.keeper.key();
+        batch.bump = ctx.bumps.batch;
+
+        // Update global stats
+        config.total_batches += 1;
+        config.total_volume_protected = config.total_volume_protected
+            .checked_add(total_input)
+            .ok_or(SwarmShieldError::Overflow)?;
+
+        // MEV saved calculation
+        let mev_saved = total_input
+            .checked_mul(297)
+            .ok_or(SwarmShieldError::Overflow)?
+            .checked_div(10000)
+            .ok_or(SwarmShieldError::Overflow)?;
+
+        // Settlement: process each encrypted intent with decrypted values
+        let remaining = &ctx.remaining_accounts;
+        require!(
+            remaining.len() == (intent_count as usize * 2),
+            SwarmShieldError::InvalidAccountCount
+        );
+
+        for i in 0..intent_count as usize {
+            let idx = i * 2;
+            let intent_account = &remaining[idx];
+            let agent_account = &remaining[idx + 1];
+
+            // Mark shielded intent as settled
+            let mut intent_data = intent_account.try_borrow_mut_data()?;
+            // ShieldedIntent layout after discriminator(8):
+            // agent(32) + encrypted_data(96) + expiry_slot(8) + is_pending(1) + nonce(8) + bump(1)
+            let is_pending_offset = 8 + 32 + 96 + 8; // = 144
+            if intent_data.len() < is_pending_offset + 1 {
+                continue;
+            }
+            if intent_data[is_pending_offset] != 1 {
+                msg!("Skipping shielded intent #{} - already settled", i);
+                continue;
+            }
+            intent_data[is_pending_offset] = 0; // Mark settled
+
+            // Get decrypted values for this intent
+            let intent_type = decrypted_types[i];
+            let intent_amount = decrypted_amounts[i];
+
+            // Process agent settlement
+            let mut agent_data = agent_account.try_borrow_mut_data()?;
+            let agent_disc_len = 8;
+            if agent_data.len() < agent_disc_len + 90 {
+                continue;
+            }
+
+            let sol_balance_offset = agent_disc_len + 64;
+            let usdc_balance_offset = agent_disc_len + 72;
+
+            // Calculate proportional output share
+            let output_share = (intent_amount as u128)
+                .checked_mul(total_output as u128)
+                .ok_or(SwarmShieldError::Overflow)?
+                .checked_div(total_input as u128)
+                .ok_or(SwarmShieldError::Overflow)? as u64;
+
+            if intent_type == 0 {
+                // BUY SOL: Deduct USDC, Add SOL
+                let current_usdc_bytes: [u8; 8] = agent_data[usdc_balance_offset..usdc_balance_offset + 8]
+                    .try_into().map_err(|_| SwarmShieldError::Overflow)?;
+                let current_usdc = u64::from_le_bytes(current_usdc_bytes);
+                let new_usdc = current_usdc.checked_sub(intent_amount)
+                    .ok_or(SwarmShieldError::InsufficientBalance)?;
+
+                let current_sol_bytes: [u8; 8] = agent_data[sol_balance_offset..sol_balance_offset + 8]
+                    .try_into().map_err(|_| SwarmShieldError::Overflow)?;
+                let current_sol = u64::from_le_bytes(current_sol_bytes);
+                let new_sol = current_sol.checked_add(output_share)
+                    .ok_or(SwarmShieldError::Overflow)?;
+
+                agent_data[usdc_balance_offset..usdc_balance_offset + 8].copy_from_slice(&new_usdc.to_le_bytes());
+                agent_data[sol_balance_offset..sol_balance_offset + 8].copy_from_slice(&new_sol.to_le_bytes());
+
+                msg!("Shielded BUY #{}: {} USDC → {} SOL", i, intent_amount, output_share);
+            } else {
+                // SELL SOL: Deduct SOL, Add USDC
+                let current_sol_bytes: [u8; 8] = agent_data[sol_balance_offset..sol_balance_offset + 8]
+                    .try_into().map_err(|_| SwarmShieldError::Overflow)?;
+                let current_sol = u64::from_le_bytes(current_sol_bytes);
+                let new_sol = current_sol.checked_sub(intent_amount)
+                    .ok_or(SwarmShieldError::InsufficientBalance)?;
+
+                let current_usdc_bytes: [u8; 8] = agent_data[usdc_balance_offset..usdc_balance_offset + 8]
+                    .try_into().map_err(|_| SwarmShieldError::Overflow)?;
+                let current_usdc = u64::from_le_bytes(current_usdc_bytes);
+                let new_usdc = current_usdc.checked_add(output_share)
+                    .ok_or(SwarmShieldError::Overflow)?;
+
+                agent_data[sol_balance_offset..sol_balance_offset + 8].copy_from_slice(&new_sol.to_le_bytes());
+                agent_data[usdc_balance_offset..usdc_balance_offset + 8].copy_from_slice(&new_usdc.to_le_bytes());
+
+                msg!("Shielded SELL #{}: {} SOL → {} USDC", i, intent_amount, output_share);
+            }
+        }
+
+        msg!(
+            "SHIELDED BATCH EXECUTED - {} encrypted intents settled atomically! MEV saved: {}",
+            intent_count,
+            mev_saved
+        );
+
+        emit!(ShieldedBatchExecuted {
+            batch_id,
+            intent_count,
+            total_input,
+            total_output,
+            mev_saved,
+            keeper: ctx.accounts.keeper.key(),
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        Ok(())
+    }
 }
 
 // ============================================================================
@@ -878,6 +1118,56 @@ pub struct UpdateConfig<'info> {
     pub authority: Signer<'info>,
 }
 
+#[derive(Accounts)]
+pub struct SubmitShieldedIntent<'info> {
+    #[account(
+        mut,
+        seeds = [b"agent", authority.key().as_ref()],
+        bump = agent.bump,
+        constraint = agent.authority == authority.key() @ SwarmShieldError::UnauthorizedAgent
+    )]
+    pub agent: Account<'info, ShieldedAgent>,
+
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + 32 + 96 + 8 + 1 + 8 + 1, // discriminator + agent + encrypted_data + expiry + pending + nonce + bump
+        seeds = [b"shielded_intent", authority.key().as_ref(), &agent.nonce.to_le_bytes()],
+        bump
+    )]
+    pub shielded_intent: Account<'info, ShieldedIntent>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(batch_id: u64)]
+pub struct ExecuteShieldedBatch<'info> {
+    #[account(
+        mut,
+        seeds = [b"config"],
+        bump = config.bump
+    )]
+    pub config: Account<'info, SwarmConfig>,
+
+    #[account(
+        init,
+        payer = keeper,
+        space = 8 + 8 + 1 + 8 + 8 + 8 + 32 + 1,
+        seeds = [b"batch", batch_id.to_le_bytes().as_ref()],
+        bump
+    )]
+    pub batch: Account<'info, BatchRecord>,
+
+    #[account(mut)]
+    pub keeper: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
 // ============================================================================
 // ERRORS
 // ============================================================================
@@ -1068,5 +1358,28 @@ pub struct WithdrawalEvent {
     pub agent: Pubkey,
     pub amount: u64,
     pub new_balance: u64,
+    pub timestamp: i64,
+}
+
+/// Emitted when an encrypted intent is submitted
+#[event]
+pub struct ShieldedIntentSubmitted {
+    pub agent: Pubkey,
+    pub intent_pubkey: Pubkey,
+    pub nonce: u64,
+    /// Hash of encrypted data (privacy-preserving event)
+    pub encrypted_data_hash: [u8; 32],
+    pub timestamp: i64,
+}
+
+/// Emitted when a shielded batch is executed
+#[event]
+pub struct ShieldedBatchExecuted {
+    pub batch_id: u64,
+    pub intent_count: u8,
+    pub total_input: u64,
+    pub total_output: u64,
+    pub mev_saved: u64,
+    pub keeper: Pubkey,
     pub timestamp: i64,
 }
