@@ -14,6 +14,15 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { parseError, getErrorAction } from '@/lib/errors';
+
+// Token pairs configuration
+const TOKEN_PAIRS = [
+  { id: 'sol-usdc', base: 'SOL', quote: 'USDC', active: true, icon: '◎' },
+  { id: 'bonk-sol', base: 'BONK', quote: 'SOL', active: false, icon: '🐕' },
+  { id: 'wbtc-usdc', base: 'wBTC', quote: 'USDC', active: false, icon: '₿' },
+  { id: 'weth-usdc', base: 'wETH', quote: 'USDC', active: false, icon: 'Ξ' },
+];
 
 interface TradeInterfaceProps {
   // Balances
@@ -53,6 +62,8 @@ export function TradeInterface({
   const [amount, setAmount] = useState('');
   const [viewState, setViewState] = useState<ViewState>('trade');
   const [showVault, setShowVault] = useState(false);
+  const [selectedPair, setSelectedPair] = useState('sol-usdc');
+  const [showTokenSelector, setShowTokenSelector] = useState(false);
 
   // Derived values
   const maxAmount = direction === 'sell' ? shieldedSol : shieldedUsdc;
@@ -201,6 +212,78 @@ export function TradeInterface({
               </AnimatePresence>
             </div>
 
+            {/* Token Pair Selector */}
+            <div className="mb-6">
+              <button
+                onClick={() => setShowTokenSelector(!showTokenSelector)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10
+                         hover:border-white/20 transition-all text-sm"
+              >
+                <span className="text-lg">{TOKEN_PAIRS.find(p => p.id === selectedPair)?.icon}</span>
+                <span className="text-white/70">
+                  {TOKEN_PAIRS.find(p => p.id === selectedPair)?.base} / {TOKEN_PAIRS.find(p => p.id === selectedPair)?.quote}
+                </span>
+                <svg className={`w-4 h-4 text-white/40 transition-transform ${showTokenSelector ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              <AnimatePresence>
+                {showTokenSelector && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10, height: 0 }}
+                    animate={{ opacity: 1, y: 0, height: 'auto' }}
+                    exit={{ opacity: 0, y: -10, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-3 p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                      <p className="text-[10px] text-white/30 uppercase tracking-widest mb-3">Select Trading Pair</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {TOKEN_PAIRS.map((pair) => (
+                          <button
+                            key={pair.id}
+                            onClick={() => {
+                              if (pair.active) {
+                                setSelectedPair(pair.id);
+                                setShowTokenSelector(false);
+                              }
+                            }}
+                            disabled={!pair.active}
+                            className={`relative flex items-center gap-2 px-3 py-2.5 rounded-lg text-left transition-all ${
+                              pair.active
+                                ? selectedPair === pair.id
+                                  ? 'bg-white/10 border border-white/20'
+                                  : 'bg-white/[0.02] border border-white/5 hover:border-white/15'
+                                : 'bg-white/[0.01] border border-white/5 opacity-60 cursor-not-allowed'
+                            }`}
+                          >
+                            <span className="text-lg">{pair.icon}</span>
+                            <div className="flex-1">
+                              <p className="text-xs text-white/80">{pair.base}/{pair.quote}</p>
+                              {!pair.active && (
+                                <p className="text-[9px] text-yellow-400/70">Coming Soon</p>
+                              )}
+                            </div>
+                            {pair.active && selectedPair === pair.id && (
+                              <span className="w-1.5 h-1.5 bg-green-400 rounded-full" />
+                            )}
+                            {!pair.active && (
+                              <span className="absolute top-1 right-1 px-1.5 py-0.5 text-[8px] bg-yellow-400/20 text-yellow-400/80 rounded-full">
+                                SOON
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[9px] text-white/20 mt-3 text-center">
+                        More pairs coming with Light Protocol ZK Compression
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
             {/* Direction Toggle - Minimal */}
             <div className="flex justify-center mb-8">
               <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/5">
@@ -300,15 +383,34 @@ export function TradeInterface({
               Submit Encrypted Intent
             </motion.button>
 
-            {/* Error Display */}
+            {/* Error Display - Enhanced */}
             {showError && (
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-red-400/80 text-sm mt-4"
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-4 p-4 rounded-xl bg-red-500/10 border border-red-500/20 max-w-sm mx-auto"
               >
-                {showError}
-              </motion.p>
+                {(() => {
+                  const parsed = parseError(showError);
+                  const action = getErrorAction(showError);
+                  return (
+                    <>
+                      <p className="text-red-400 font-medium text-sm">{parsed.title}</p>
+                      <p className="text-red-400/70 text-xs mt-1">{parsed.message}</p>
+                      {action && (
+                        <a
+                          href={action.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block mt-2 text-xs text-red-300 underline hover:text-red-200"
+                        >
+                          {action.text} ↗
+                        </a>
+                      )}
+                    </>
+                  );
+                })()}
+              </motion.div>
             )}
 
             {/* How it works - Ultra minimal */}

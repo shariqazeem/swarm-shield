@@ -1,0 +1,38 @@
+{
+  "name": "@swarmshield/agent-sdk",
+  "version": "0.1.0",
+  "description": "SwarmShield Agent SDK - MEV-protected trading for AI agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "demo": "npx tsx agent-example.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.98.0",
+    "bn.js": "^5.2.1",
+    "js-sha256": "^0.11.0",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.6",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "solana",
+    "mev",
+    "dark-pool",
+    "ai-agent",
+    "encryption",
+    "defi"
+  ],
+  "author": "SwarmShield Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/swarmshield/swarmshield"
+  }
+}

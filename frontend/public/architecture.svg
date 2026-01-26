@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0a0a"/>
+      <stop offset="100%" style="stop-color:#1a1a2e"/>
+    </linearGradient>
+    <linearGradient id="boxGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1f1f3a"/>
+      <stop offset="100%" style="stop-color:#0f0f1f"/>
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00ff88"/>
+      <stop offset="100%" style="stop-color:#00cc6a"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="600" fill="url(#bgGrad)"/>
+  
+  <!-- Title -->
+  <text x="600" y="50" text-anchor="middle" fill="white" font-family="monospace" font-size="28" font-weight="bold">SwarmShield Encrypted Intent Flow</text>
+  <text x="600" y="80" text-anchor="middle" fill="#666" font-family="monospace" font-size="14">MEV Protection through End-to-End Encryption</text>
+  
+  <!-- Step 1: Agent/Client -->
+  <g transform="translate(80, 150)">
+    <rect width="180" height="120" rx="10" fill="url(#boxGrad)" stroke="#333" stroke-width="2"/>
+    <text x="90" y="30" text-anchor="middle" fill="#00ff88" font-family="monospace" font-size="12" font-weight="bold">1. AGENT</text>
+    <text x="90" y="55" text-anchor="middle" fill="white" font-family="monospace" font-size="11">Trade Intent:</text>
+    <text x="90" y="75" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">Type: SELL</text>
+    <text x="90" y="90" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">Amount: 1 SOL</text>
+    <text x="90" y="105" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">Min: 180 USDC</text>
+  </g>
+  
+  <!-- Arrow 1 -->
+  <g transform="translate(270, 200)">
+    <line x1="0" y1="10" x2="80" y2="10" stroke="url(#greenGrad)" stroke-width="3" marker-end="url(#arrowhead)"/>
+    <text x="40" y="35" text-anchor="middle" fill="#00ff88" font-family="monospace" font-size="10">ENCRYPT</text>
+  </g>
+  
+  <!-- Step 2: Encryption -->
+  <g transform="translate(360, 150)">
+    <rect width="180" height="120" rx="10" fill="url(#boxGrad)" stroke="#00ff88" stroke-width="2" filter="url(#glow)"/>
+    <text x="90" y="30" text-anchor="middle" fill="#00ff88" font-family="monospace" font-size="12" font-weight="bold">2. ENCRYPT</text>
+    <text x="90" y="55" text-anchor="middle" fill="white" font-family="monospace" font-size="10">NaCl Box (X25519)</text>
+    <text x="90" y="75" text-anchor="middle" fill="#888" font-family="monospace" font-size="9">ephemeral_pk: 32 bytes</text>
+    <text x="90" y="90" text-anchor="middle" fill="#888" font-family="monospace" font-size="9">nonce: 24 bytes</text>
+    <text x="90" y="105" text-anchor="middle" fill="#888" font-family="monospace" font-size="9">ciphertext: 33 bytes</text>
+  </g>
+  
+  <!-- Arrow 2 -->
+  <g transform="translate(550, 200)">
+    <line x1="0" y1="10" x2="80" y2="10" stroke="url(#greenGrad)" stroke-width="3"/>
+    <text x="40" y="35" text-anchor="middle" fill="#00ff88" font-family="monospace" font-size="10">SUBMIT</text>
+  </g>
+  
+  <!-- Step 3: On-Chain -->
+  <g transform="translate(640, 150)">
+    <rect width="180" height="120" rx="10" fill="url(#boxGrad)" stroke="#9945FF" stroke-width="2"/>
+    <text x="90" y="30" text-anchor="middle" fill="#9945FF" font-family="monospace" font-size="12" font-weight="bold">3. ON-CHAIN</text>
+    <text x="90" y="55" text-anchor="middle" fill="white" font-family="monospace" font-size="10">ShieldedIntent Account</text>
+    <text x="90" y="75" text-anchor="middle" fill="#ff4444" font-family="monospace" font-size="9">9bed43a48f60...</text>
+    <text x="90" y="90" text-anchor="middle" fill="#ff4444" font-family="monospace" font-size="9">MEV bots see</text>
+    <text x="90" y="105" text-anchor="middle" fill="#ff4444" font-family="monospace" font-size="9">ONLY random bytes</text>
+  </g>
+  
+  <!-- Arrow 3 -->
+  <g transform="translate(830, 200)">
+    <line x1="0" y1="10" x2="80" y2="10" stroke="url(#greenGrad)" stroke-width="3"/>
+    <text x="40" y="35" text-anchor="middle" fill="#00ff88" font-family="monospace" font-size="10">BATCH</text>
+  </g>
+  
+  <!-- Step 4: Keeper -->
+  <g transform="translate(920, 150)">
+    <rect width="180" height="120" rx="10" fill="url(#boxGrad)" stroke="#ff8800" stroke-width="2"/>
+    <text x="90" y="30" text-anchor="middle" fill="#ff8800" font-family="monospace" font-size="12" font-weight="bold">4. KEEPER</text>
+    <text x="90" y="55" text-anchor="middle" fill="white" font-family="monospace" font-size="10">Decrypt + Batch</text>
+    <text x="90" y="75" text-anchor="middle" fill="#888" font-family="monospace" font-size="9">Groups by direction</text>
+    <text x="90" y="90" text-anchor="middle" fill="#888" font-family="monospace" font-size="9">Nets exposure</text>
+    <text x="90" y="105" text-anchor="middle" fill="#888" font-family="monospace" font-size="9">Single Jupiter swap</text>
+  </g>
+  
+  <!-- MEV Bot (crossed out) -->
+  <g transform="translate(640, 320)">
+    <rect width="180" height="80" rx="10" fill="#1a0000" stroke="#ff0000" stroke-width="2" stroke-dasharray="5,5"/>
+    <text x="90" y="30" text-anchor="middle" fill="#ff0000" font-family="monospace" font-size="12" font-weight="bold">MEV BOT</text>
+    <text x="90" y="50" text-anchor="middle" fill="#ff4444" font-family="monospace" font-size="10">Cannot see:</text>
+    <text x="90" y="70" text-anchor="middle" fill="#666" font-family="monospace" font-size="9">Direction | Amount | Slippage</text>
+    <!-- X mark -->
+    <line x1="20" y1="20" x2="160" y2="60" stroke="#ff0000" stroke-width="4"/>
+    <line x1="160" y1="20" x2="20" y2="60" stroke="#ff0000" stroke-width="4"/>
+  </g>
+  
+  <!-- Result Box -->
+  <g transform="translate(460, 450)">
+    <rect width="280" height="100" rx="10" fill="url(#boxGrad)" stroke="#00ff88" stroke-width="2"/>
+    <text x="140" y="30" text-anchor="middle" fill="#00ff88" font-family="monospace" font-size="14" font-weight="bold">RESULT</text>
+    <text x="140" y="55" text-anchor="middle" fill="white" font-family="monospace" font-size="12">Agents receive tokens</text>
+    <text x="140" y="75" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">0% MEV extraction</text>
+    <text x="140" y="92" text-anchor="middle" fill="#888" font-family="monospace" font-size="10">TRUE cryptographic privacy</text>
+  </g>
+  
+  <!-- Legend -->
+  <g transform="translate(50, 500)">
+    <text x="0" y="0" fill="#666" font-family="monospace" font-size="11">Algorithm: NaCl Box (X25519 + XSalsa20-Poly1305)</text>
+    <text x="0" y="20" fill="#666" font-family="monospace" font-size="11">Payload: 96 bytes encrypted | Plaintext: 17 bytes</text>
+    <text x="0" y="40" fill="#666" font-family="monospace" font-size="11">Program: 5rLQtJrr27bt4y7ERMgnQUcALKXfy2uTgEdq7rfbQvew</text>
+  </g>
+  
+  <!-- Sponsor badges -->
+  <g transform="translate(850, 500)">
+    <rect x="0" y="0" width="60" height="20" rx="3" fill="#9945FF"/>
+    <text x="30" y="14" text-anchor="middle" fill="white" font-family="monospace" font-size="9">Solana</text>
+    <rect x="70" y="0" width="60" height="20" rx="3" fill="#ff8800"/>
+    <text x="100" y="14" text-anchor="middle" fill="white" font-family="monospace" font-size="9">Helius</text>
+    <rect x="140" y="0" width="60" height="20" rx="3" fill="#00aaff"/>
+    <text x="170" y="14" text-anchor="middle" fill="white" font-family="monospace" font-size="9">Jupiter</text>
+    <rect x="210" y="0" width="80" height="20" rx="3" fill="#00ff88"/>
+    <text x="250" y="14" text-anchor="middle" fill="black" font-family="monospace" font-size="9">Light Protocol</text>
+  </g>
+</svg>
