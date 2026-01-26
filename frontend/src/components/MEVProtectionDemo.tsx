@@ -72,7 +72,7 @@ export function MEVProtectionDemo() {
       {/* Trigger Button */}
       <motion.button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-20 left-4 z-40 px-4 py-2
+        className="fixed bottom-36 left-4 z-40 px-4 py-2
                    bg-red-500/10 border border-red-500/30 rounded-full
                    text-red-400/80 text-[11px] font-medium tracking-wider uppercase
                    hover:bg-red-500/20 hover:border-red-500/50 transition-all

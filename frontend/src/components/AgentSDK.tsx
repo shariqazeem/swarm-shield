@@ -228,10 +228,10 @@ agent.submit_intent(IntentType::Sell, 0.05, 9.5).await?;`
       {/* Trigger Button - Bottom left, prominent */}
       <motion.button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-24 left-6 z-40 px-4 py-2.5
+        className="fixed bottom-24 left-4 z-40 px-4 py-2
                    bg-white/5 hover:bg-white/10 backdrop-blur-sm
                    text-white/60 hover:text-white/90 transition-all
-                   border border-white/10 hover:border-white/20 rounded-xl
+                   border border-white/10 hover:border-white/20 rounded-full
                    flex items-center gap-2"
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}

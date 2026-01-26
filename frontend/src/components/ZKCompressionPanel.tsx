@@ -87,7 +87,7 @@ export function ZKCompressionPanel() {
       {/* Trigger Button */}
       <motion.button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-32 left-4 z-40 px-4 py-2
+        className="fixed bottom-48 left-4 z-40 px-4 py-2
                    bg-purple-500/10 border border-purple-500/30 rounded-full
                    text-purple-400/80 text-[11px] font-medium tracking-wider uppercase
                    hover:bg-purple-500/20 hover:border-purple-500/50 transition-all
