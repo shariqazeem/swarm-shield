@@ -1,0 +1,360 @@
+/* SwarmShield Docs - Minimalist Dark Theme */
+
+:root {
+  /* Force dark mode */
+  --vp-c-bg: #000000;
+  --vp-c-bg-alt: #0a0a0a;
+  --vp-c-bg-elv: #111111;
+  --vp-c-bg-soft: #0a0a0a;
+
+  /* Text colors */
+  --vp-c-text-1: rgba(255, 255, 255, 0.9);
+  --vp-c-text-2: rgba(255, 255, 255, 0.6);
+  --vp-c-text-3: rgba(255, 255, 255, 0.4);
+
+  /* Brand colors - minimal white accent */
+  --vp-c-brand-1: rgba(255, 255, 255, 0.9);
+  --vp-c-brand-2: rgba(255, 255, 255, 0.7);
+  --vp-c-brand-3: rgba(255, 255, 255, 0.5);
+  --vp-c-brand-soft: rgba(255, 255, 255, 0.1);
+
+  /* Borders */
+  --vp-c-border: rgba(255, 255, 255, 0.08);
+  --vp-c-divider: rgba(255, 255, 255, 0.05);
+  --vp-c-gutter: rgba(255, 255, 255, 0.05);
+
+  /* Buttons */
+  --vp-button-brand-border: rgba(255, 255, 255, 0.2);
+  --vp-button-brand-text: #000000;
+  --vp-button-brand-bg: #ffffff;
+  --vp-button-brand-hover-border: rgba(255, 255, 255, 0.4);
+  --vp-button-brand-hover-text: #000000;
+  --vp-button-brand-hover-bg: rgba(255, 255, 255, 0.9);
+  --vp-button-brand-active-border: rgba(255, 255, 255, 0.5);
+  --vp-button-brand-active-text: #000000;
+  --vp-button-brand-active-bg: rgba(255, 255, 255, 0.8);
+
+  --vp-button-alt-border: rgba(255, 255, 255, 0.1);
+  --vp-button-alt-text: rgba(255, 255, 255, 0.8);
+  --vp-button-alt-bg: rgba(255, 255, 255, 0.05);
+  --vp-button-alt-hover-border: rgba(255, 255, 255, 0.2);
+  --vp-button-alt-hover-text: rgba(255, 255, 255, 0.9);
+  --vp-button-alt-hover-bg: rgba(255, 255, 255, 0.1);
+
+  /* Home hero */
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(135deg, #ffffff 0%, rgba(255,255,255,0.6) 100%);
+  --vp-home-hero-image-background-image: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+  --vp-home-hero-image-filter: none;
+
+  /* Code blocks */
+  --vp-code-block-bg: #0a0a0a;
+  --vp-code-line-highlight-color: rgba(255, 255, 255, 0.05);
+  --vp-code-line-number-color: rgba(255, 255, 255, 0.3);
+  --vp-code-copy-code-hover-bg: rgba(255, 255, 255, 0.1);
+
+  /* Sidebar */
+  --vp-sidebar-bg-color: #000000;
+
+  /* Nav */
+  --vp-nav-bg-color: rgba(0, 0, 0, 0.8);
+
+  /* Custom properties */
+  --vp-c-tip-1: rgba(255, 255, 255, 0.8);
+  --vp-c-tip-2: rgba(255, 255, 255, 0.5);
+  --vp-c-tip-3: rgba(255, 255, 255, 0.3);
+  --vp-c-tip-soft: rgba(255, 255, 255, 0.05);
+}
+
+/* Dark mode overrides */
+.dark {
+  --vp-c-bg: #000000;
+  --vp-c-bg-alt: #0a0a0a;
+  --vp-c-bg-elv: #111111;
+  --vp-c-bg-soft: #0a0a0a;
+}
+
+/* Force dark mode always */
+html {
+  color-scheme: dark;
+}
+
+/* Body */
+body {
+  background: #000000;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Navigation */
+.VPNav {
+  background: rgba(0, 0, 0, 0.85) !important;
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.VPNavBar {
+  background: transparent !important;
+}
+
+.VPNavBarTitle .title {
+  font-weight: 300 !important;
+  letter-spacing: 0.05em;
+}
+
+/* Sidebar */
+.VPSidebar {
+  background: #000000 !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.VPSidebarItem .text {
+  font-weight: 300;
+}
+
+.VPSidebarItem.is-active .text {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Content */
+.VPContent {
+  background: #000000 !important;
+}
+
+.VPDoc {
+  background: #000000 !important;
+}
+
+/* Typography */
+.vp-doc h1 {
+  font-weight: 200;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #ffffff 0%, rgba(255,255,255,0.7) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.vp-doc h2 {
+  font-weight: 300;
+  border-top: none;
+  padding-top: 24px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.vp-doc h3 {
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.vp-doc p {
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.8;
+}
+
+.vp-doc a {
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.2s ease;
+}
+
+.vp-doc a:hover {
+  color: #ffffff;
+  border-bottom-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Code blocks */
+.vp-doc div[class*='language-'] {
+  background: #0a0a0a !important;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.vp-doc div[class*='language-'] code {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+}
+
+/* Inline code */
+.vp-doc :not(pre) > code {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.9em;
+}
+
+/* Tables */
+.vp-doc table {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.vp-doc th {
+  background: rgba(255, 255, 255, 0.03);
+  font-weight: 400;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.vp-doc td {
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+.vp-doc tr {
+  background: transparent;
+}
+
+.vp-doc tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Blockquotes / Tips */
+.vp-doc .tip {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.vp-doc .warning {
+  background: rgba(255, 200, 0, 0.05);
+  border-color: rgba(255, 200, 0, 0.2);
+}
+
+/* Home page */
+.VPHome {
+  background: #000000 !important;
+}
+
+.VPHero .name {
+  font-weight: 200 !important;
+}
+
+.VPHero .text {
+  font-weight: 300 !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.VPHero .tagline {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Feature cards */
+.VPFeature {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border-radius: 12px !important;
+  transition: all 0.3s ease !important;
+}
+
+.VPFeature:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  transform: translateY(-2px);
+}
+
+.VPFeature .title {
+  font-weight: 400 !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.VPFeature .details {
+  font-weight: 300 !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Footer */
+.VPFooter {
+  background: #000000 !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.VPFooter .message,
+.VPFooter .copyright {
+  color: rgba(255, 255, 255, 0.3) !important;
+  font-weight: 300;
+}
+
+/* Search */
+.DocSearch-Button {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Selection */
+::selection {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+/* Links in nav */
+.VPNavBarMenuLink {
+  font-weight: 300 !important;
+}
+
+/* Badge styling */
+.VPBadge {
+  font-weight: 400 !important;
+}
+
+/* Local nav (breadcrumb) */
+.VPLocalNav {
+  background: rgba(0, 0, 0, 0.9) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Outline (table of contents) */
+.VPDocOutlineItem a {
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.VPDocOutlineItem a:hover,
+.VPDocOutlineItem a.active {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Prev/Next navigation */
+.pager-link {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border-radius: 8px !important;
+}
+
+.pager-link:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Edit link */
+.VPDocFooter .edit-link-button {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.VPDocFooter .edit-link-button:hover {
+  color: rgba(255, 255, 255, 0.8);
+}

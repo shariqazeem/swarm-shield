@@ -3,10 +3,12 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: 'SwarmShield',
   description: 'MEV Protection Dark Pool for Solana',
-  ignoreDeadLinks: true,  // Allow missing pages during development
+  ignoreDeadLinks: true,
+  appearance: 'dark',
 
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
+    ['meta', { name: 'theme-color', content: '#000000' }],
   ],
 
   themeConfig: {
@@ -15,8 +17,10 @@ export default defineConfig({
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Guide', link: '/guide/getting-started' },
+      { text: 'SDK', link: '/sdk/quickstart' },
+      { text: 'Integrations', link: '/integrations/overview' },
       { text: 'Architecture', link: '/architecture/overview' },
-      { text: 'Demo', link: 'https://swarmshield.vercel.app', target: '_blank' },
+      { text: 'Launch App', link: 'https://swarmshield.vercel.app', target: '_blank' },
     ],
 
     sidebar: {
@@ -39,11 +43,34 @@ export default defineConfig({
           ]
         }
       ],
+      '/sdk/': [
+        {
+          text: 'Agent SDK',
+          items: [
+            { text: 'Quick Start', link: '/sdk/quickstart' },
+            { text: 'Installation', link: '/sdk/installation' },
+            { text: 'API Reference', link: '/sdk/api-reference' },
+            { text: 'Framework Integrations', link: '/sdk/frameworks' },
+          ]
+        }
+      ],
+      '/integrations/': [
+        {
+          text: 'Integrations',
+          items: [
+            { text: 'Overview', link: '/integrations/overview' },
+            { text: 'Light Protocol', link: '/integrations/light-protocol' },
+            { text: 'Helius RPC', link: '/integrations/helius' },
+            { text: 'Range Protocol', link: '/integrations/range' },
+          ]
+        }
+      ],
       '/architecture/': [
         {
           text: 'Architecture',
           items: [
             { text: 'Overview', link: '/architecture/overview' },
+            { text: 'Encryption', link: '/architecture/encryption' },
             { text: 'Smart Contract', link: '/architecture/smart-contract' },
             { text: 'Keeper Service', link: '/architecture/keeper' },
             { text: 'MEV Protection', link: '/architecture/mev-protection' },

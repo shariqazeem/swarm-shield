@@ -3,70 +3,98 @@ layout: home
 
 hero:
   name: SwarmShield
-  text: Trade Together. Defeat MEV.
-  tagline: Privacy-preserving dark pool for Solana. Batch your trades with others to become invisible to MEV bots.
+  text: Trade in the Dark
+  tagline: Privacy-preserving dark pool for Solana. End-to-end encrypted intents. MEV bots see only random bytes.
   actions:
     - theme: brand
       text: Get Started
       link: /guide/getting-started
     - theme: alt
-      text: View Demo
+      text: Launch App
       link: https://swarmshield.vercel.app
 
 features:
-  - icon: 🛡️
-    title: MEV Protection
-    details: Your trades are batched with others into a single transaction. MEV bots can't identify or front-run individual trades.
-  - icon: ⚡
-    title: Real Token Transfers
-    details: Not a simulation. Real SOL deposits and real SwarmUSDC token withdrawals directly to your wallet.
-  - icon: 🔒
-    title: Privacy by Design
-    details: Intent-based architecture hides your trading activity. Only the batched aggregate is visible on-chain.
-  - icon: 🐝
-    title: Swarm Intelligence
-    details: The more traders in the swarm, the stronger the protection. Collective anonymity through batching.
+  - title: End-to-End Encryption
+    details: NaCl Box encryption ensures your trade details are cryptographically hidden. Only the keeper can decrypt, and only at execution time.
+  - title: Batch Execution
+    details: Multiple intents combined into single transactions. Individual trades become invisible within the aggregate.
+  - title: Real Token Transfers
+    details: Not a simulation. Real SOL deposits, real SwarmUSDC tokens, verifiable on-chain. Production-ready architecture.
+  - title: Agent Ready
+    details: Built for autonomous AI agents. SDK integrations for Eliza, LangChain, and more. Trade programmatically without MEV.
 ---
 
-## How It Works
+<div class="custom-section">
+
+## The Problem
+
+Every trade you submit is visible in the mempool before execution. MEV bots exploit this transparency:
+
+| Attack | How it works | Your loss |
+|--------|-------------|-----------|
+| Front-run | Bot buys before you, sells to you higher | 1-5% |
+| Sandwich | Bot surrounds your trade | 2-10% |
+| Back-run | Bot captures your price impact | 0.5-2% |
+
+## The Solution
+
+SwarmShield makes your trades invisible:
 
 ```
-You (Intent) → SwarmShield → Batch with Others → Single DEX Trade → Fair Settlement
-     🔒            🛡️              🐝                  ⚡                ✅
+Your Intent    Encrypted     Batched        Executed
+    ↓             ↓            ↓              ↓
+ 0.1 SOL  →  9bed43a8...  →  [████]  →  Fair Output
+    ?             ?            ?              ✓
 ```
 
-### The Problem: MEV Extraction
+MEV bots see encrypted bytes. No direction. No amount. No opportunity.
 
-Every trade you make on-chain is visible before it executes. MEV bots exploit this by:
-- **Front-running**: Buying before your buy, selling to you at a higher price
-- **Sandwich attacks**: Surrounding your trade to extract value
-- **Back-running**: Capturing arbitrage from your trade's price impact
+## Architecture
 
-### The Solution: Swarm Protection
+```
+┌─────────────────────────────────────────────────────────┐
+│                                                         │
+│   User  →  Encrypt Intent  →  On-Chain Pool            │
+│                                      ↓                  │
+│                              Keeper Batches             │
+│                                      ↓                  │
+│   User  ←  Fair Settlement  ←  DEX Execution           │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
 
-SwarmShield batches multiple trade intents into a single transaction:
+## Integrations
 
-1. **Submit Intent** - Your trade intent is encrypted and pooled
-2. **Batch Formation** - 3+ intents trigger automatic batching
-3. **Unified Execution** - One transaction, multiple traders hidden inside
-4. **Fair Distribution** - Outputs distributed proportionally to all participants
+Built on production infrastructure:
 
-## Real, Not Simulated
+- **Light Protocol** — ZK compression for 99% cost reduction
+- **Helius** — Enterprise RPC with enhanced APIs
+- **Range Protocol** — Wallet compliance screening
+- **Jupiter** — Best-price DEX aggregation
 
-- **Real SOL deposits** to on-chain vault PDA
-- **Real SwarmUSDC tokens** - actual SPL token transfers
-- **Verifiable on Solscan** - every transaction has proof
-- **Production-ready architecture** - built for mainnet
-
-## Built For
-
-- **AI Agents** - Autonomous trading without MEV extraction
-- **Whale Traders** - Large orders without signaling to bots
-- **DeFi Users** - Fair execution on every swap
-- **Privacy Seekers** - Trade without revealing your strategy
-
----
-
-<div style="text-align: center; margin-top: 2rem; opacity: 0.6;">
-  Built with ❤️ for Solana Privacy Hackathon 2026
 </div>
+
+<style>
+.custom-section {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.custom-section h2 {
+  margin-top: 3rem;
+  font-weight: 200;
+}
+
+.custom-section table {
+  width: 100%;
+  margin: 1.5rem 0;
+}
+
+.custom-section pre {
+  background: #0a0a0a;
+  padding: 1.5rem;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+</style>

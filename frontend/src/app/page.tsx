@@ -304,7 +304,7 @@ export default function SwarmShield() {
       {/* Main content */}
       <div className="relative z-10 min-h-screen flex flex-col">
           {/* Minimal header */}
-        <header className="flex items-center justify-between p-6 md:p-10">
+        <header className="flex items-center justify-between p-6 md:p-10 relative z-50">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
               <div className="w-4 h-4 rounded-full bg-white/80" />
@@ -324,6 +324,14 @@ export default function SwarmShield() {
           </div>
 
           <div className="flex items-center gap-4 md:gap-6">
+            <a
+              href="https://swarmshield-docs.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-white/50 hover:text-white transition-colors hidden md:inline-block cursor-pointer"
+            >
+              Docs
+            </a>
             <NetworkStatus />
             <span className="text-[10px] text-white/20 hidden md:block">DEVNET</span>
             <WalletMultiButtonDynamic />
