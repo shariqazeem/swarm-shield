@@ -148,18 +148,19 @@ export function useSwarmShield(): [SwarmShieldState, SwarmShieldActions] {
     }
   }, [client, wallet.publicKey]);
 
-  // Refresh on mount and when client changes
+  // Refresh on mount and when client changes (delayed to avoid rate limits)
   useEffect(() => {
-    refresh();
+    const timeout = setTimeout(() => refresh(), 1500);
+    return () => clearTimeout(timeout);
   }, [refresh]);
 
-  // Real-time polling every 5 seconds (silent - no loading spinner)
+  // Background polling every 30 seconds (silent - no loading spinner)
   useEffect(() => {
     if (!client || !wallet.publicKey) return;
 
     const interval = setInterval(() => {
       refresh(true); // Silent refresh - don't show loading spinner
-    }, 5000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [client, wallet.publicKey, refresh]);

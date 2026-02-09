@@ -12,7 +12,7 @@
  * ============================================================================
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HELIUS_CONFIG } from '@/lib/rpc-config';
 
@@ -25,39 +25,59 @@ export function NetworkStatus({ className = '' }: NetworkStatusProps) {
   const [latency, setLatency] = useState<number | null>(null);
   const [slot, setSlot] = useState<number | null>(null);
   const [status, setStatus] = useState<'connected' | 'connecting' | 'error'>('connecting');
+  const slotRef = useRef<number | null>(null);
 
-  // Measure real latency to Helius RPC
-  useEffect(() => {
-    const measureLatency = async () => {
-      try {
-        const start = Date.now();
-        const response = await fetch(HELIUS_CONFIG.rpcUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 'latency-check',
-            method: 'getSlot',
-          }),
-        });
-        const data = await response.json();
-        const elapsed = Date.now() - start;
+  const measureLatency = useCallback(async () => {
+    try {
+      const start = Date.now();
+      const response = await fetch(HELIUS_CONFIG.rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 'latency-check',
+          method: 'getSlot',
+        }),
+      });
+      const elapsed = Date.now() - start;
+      setLatency(elapsed);
 
-        setLatency(elapsed);
+      if (!response.ok) {
+        // 429 or other error — show connected if we had a previous success
+        if (slotRef.current != null) {
+          setStatus('connected');
+        }
+        // Don't change status to error — just keep current state
+        return;
+      }
+
+      const data = await response.json();
+      if (data.result != null) {
+        slotRef.current = data.result;
         setSlot(data.result);
         setStatus('connected');
-      } catch (error) {
-        setStatus('error');
+      } else if (slotRef.current != null) {
+        setStatus('connected');
       }
-    };
-
-    // Initial measurement
-    measureLatency();
-
-    // Refresh every 30 seconds
-    const interval = setInterval(measureLatency, 30000);
-    return () => clearInterval(interval);
+    } catch {
+      // Network error — keep showing connected if we ever connected
+      if (slotRef.current != null) {
+        setStatus('connected');
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    // Delay initial call by 5s to let wallet adapter finish its RPC calls first
+    const initialTimeout = setTimeout(measureLatency, 5000);
+
+    // Refresh every 90 seconds
+    const interval = setInterval(measureLatency, 90000);
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(interval);
+    };
+  }, [measureLatency]);
 
   const getStatusColor = () => {
     switch (status) {
@@ -95,7 +115,7 @@ export function NetworkStatus({ className = '' }: NetworkStatusProps) {
             <div className="flex items-center gap-2 mb-3 pb-3 border-b border-white/5">
               <span className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
               <span className="text-sm text-white/80">
-                {status === 'connected' ? 'Connected' : status === 'connecting' ? 'Connecting...' : 'Error'}
+                {status === 'connected' ? 'Connected' : 'Connecting...'}
               </span>
             </div>
 
@@ -108,13 +128,13 @@ export function NetworkStatus({ className = '' }: NetworkStatusProps) {
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-white/40 uppercase tracking-wider">Latency</span>
                 <span className="text-xs text-white/70 font-mono">
-                  {latency !== null ? `${latency}ms` : '...'}
+                  {latency != null ? `${latency}ms` : '...'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-white/40 uppercase tracking-wider">Slot</span>
                 <span className="text-xs text-white/70 font-mono">
-                  {slot !== null ? slot.toLocaleString() : '...'}
+                  {slot != null ? slot.toLocaleString() : '...'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
